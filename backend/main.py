@@ -367,3 +367,81 @@ def get_events(
     ).all()
 
     return create_event_summary(reports)
+
+
+# Get Overall Analytics
+@app.get("/analytics")
+def get_analytics(db: Session = Depends(get_db)):
+    reports = db.query(WeatherReport).all()
+
+    event_type_counts = {}
+    verification_counts = {
+        "Verified": 0,
+        "Pending": 0,
+        "Under Review": 0,
+        "Rejected": 0,
+    }
+    city_counts = {}
+
+    for report in reports:
+        # Count reports by event type
+        event_type = report.event_type or "Unknown"
+        event_type_counts[event_type] = (
+            event_type_counts.get(event_type, 0) + 1
+        )
+
+        # Count reports by verification status
+        status = (report.verification_status or "Pending").strip().casefold()
+
+        if status == "verified":
+            verification_counts["Verified"] += 1
+        elif status == "under review":
+            verification_counts["Under Review"] += 1
+        elif status == "rejected":
+            verification_counts["Rejected"] += 1
+        else:
+            verification_counts["Pending"] += 1
+
+        # Count reports by city and state
+        city = report.city or "Unknown"
+        state = report.state or "Unknown"
+        location_key = (city, state)
+
+        if location_key not in city_counts:
+            city_counts[location_key] = 0
+
+        city_counts[location_key] += 1
+
+    # Use existing event aggregation logic
+    event_summary = create_event_summary(reports)
+
+    return {
+        "total_reports": len(reports),
+        "total_events": event_summary["total_events"],
+        "reports_by_event_type": [
+            {
+                "event_type": event_type,
+                "count": count
+            }
+            for event_type, count in sorted(
+                event_type_counts.items()
+            )
+        ],
+        "reports_by_verification_status": [
+            {
+                "status": status,
+                "count": count
+            }
+            for status, count in verification_counts.items()
+        ],
+        "reports_by_city": [
+            {
+                "city": city,
+                "state": state,
+                "count": count
+            }
+            for (city, state), count in sorted(
+                city_counts.items()
+            )
+        ],
+    }
