@@ -1,141 +1,219 @@
+
 import re
 
 
 EVENT_KEYWORDS = {
     "Flood": [
-        "flood",
-        "flooded",
-        "flooding",
-        "waterlogging",
-        "water logged",
-        "water entered",
-        "submerged",
-        "roads underwater"
+        ("roads underwater", 5),
+        ("water entered", 5),
+        ("waterlogging", 5),
+        ("water logged", 5),
+        ("submerged", 5),
+        ("flooding", 5),
+        ("flooded", 5),
+        ("flood", 5),
     ],
-
     "Heavy Rainfall": [
-        "heavy rain",
-        "heavy rainfall",
-        "intense rain",
-        "torrential rain",
-        "downpour",
-        "rainfall"
+        ("torrential rain", 5),
+        ("heavy rainfall", 5),
+        ("intense rain", 4),
+        ("heavy rain", 4),
+        ("downpour", 4),
+        ("rainfall", 2),
+        ("rain", 1),
     ],
-
     "Thunderstorm": [
-        "thunderstorm",
-        "thunder",
-        "lightning",
-        "storm"
+        ("thunderstorm", 5),
+        ("lightning", 4),
+        ("thunder", 3),
+        ("storm", 1),
     ],
-
     "Heatwave": [
-        "heatwave",
-        "heat wave",
-        "extreme heat",
-        "very hot",
-        "temperature high"
+        ("extreme heat", 5),
+        ("heatwave", 5),
+        ("heat wave", 5),
+        ("very hot", 3),
+        ("temperature high", 3),
     ],
-
     "Fog": [
-        "fog",
-        "dense fog",
-        "low visibility",
-        "mist"
+        ("dense fog", 5),
+        ("low visibility", 4),
+        ("fog", 3),
+        ("mist", 2),
     ],
-
     "Dust Storm": [
-        "dust storm",
-        "dust",
-        "dusty"
+        ("dust storm", 5),
+        ("dusty", 2),
+        ("dust", 1),
     ],
-
     "Strong Wind": [
-        "strong wind",
-        "high winds",
-        "gust",
-        "windstorm"
+        ("strong winds", 5),
+        ("strong wind", 5),
+        ("high winds", 5),
+        ("windstorm", 5),
+        ("gust", 3),
     ],
-
     "Hailstorm": [
-        "hail",
-        "hailstorm",
-        "hailstones"
-    ]
+        ("hailstorm", 5),
+        ("hailstones", 5),
+        ("hail", 4),
+    ],
 }
+
+
+def normalize_text(text: str) -> str:
+    """Normalize text for consistent keyword matching."""
+    text = (text or "").casefold()
+    text = re.sub(r"[^\w\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def classify_event(text: str):
     """
-    Identify the most likely weather event
-    from the report text.
+    Classify a weather report using weighted keywords.
+    This is a heuristic classifier, not a trained ML model.
     """
+    normalized = normalize_text(text)
 
-    text = text.lower()
+    if not normalized:
+        return "Unknown", 30
 
     scores = {}
 
     for event, keywords in EVENT_KEYWORDS.items():
+        matches = []
 
-        score = 0
+        for keyword, weight in keywords:
+            pattern = (
+                r"(?<!\w)"
+                + re.escape(keyword)
+                + r"(?!\w)"
+            )
 
-        for keyword in keywords:
-            if keyword in text:
-                score += 1
+            match = re.search(pattern, normalized)
 
-        scores[event] = score
+            if match:
+                matches.append(
+                    (match.start(), match.end(), weight)
+                )
 
-    best_event = max(scores, key=scores.get)
-    best_score = scores[best_event]
+        # Prefer longer phrases to avoid counting a phrase
+        # and its contained word separately.
+        matches.sort(
+            key=lambda item: item[1] - item[0],
+            reverse=True
+        )
+
+        selected = []
+
+        for start, end, weight in matches:
+            overlaps = any(
+                start < selected_end and end > selected_start
+                for selected_start, selected_end, _ in selected
+            )
+
+            if not overlaps:
+                selected.append((start, end, weight))
+
+        scores[event] = sum(
+            weight for _, _, weight in selected
+        )
+
+    ranked = sorted(
+        scores.items(),
+        key=lambda item: item[1],
+        reverse=True
+    )
+
+    best_event, best_score = ranked[0]
+    second_score = ranked[1][1]
 
     if best_score == 0:
         return "Unknown", 30
 
-    confidence = min(60 + (best_score * 12), 96)
+    tie_resolved = False
+
+    # Resolve a tie in favour of Flood only when the
+    # report explicitly contains a flood-related indicator.
+    if best_score == second_score:
+        tied_events = [
+            event for event, score in ranked
+            if score == best_score
+        ]
+
+        flood_indicators = [
+            "flood",
+            "flooded",
+            "flooding",
+            "waterlogging",
+            "water logged",
+            "water entered",
+            "submerged",
+            "roads underwater",
+        ]
+
+        has_flood_indicator = any(
+            re.search(
+                r"(?<!\w)" + re.escape(keyword) + r"(?!\w)",
+                normalized
+            )
+            for keyword in flood_indicators
+        )
+
+        if "Flood" in tied_events and has_flood_indicator:
+            best_event = "Flood"
+            tie_resolved = True
+        else:
+            return "Unknown", 45
+
+    score_gap = best_score - second_score
+
+    confidence = min(
+        55
+        + min(best_score * 5, 25)
+        + min(score_gap * 3, 12),
+        92
+    )
+
+    # A rule-based tie-break is less certain than a clear match.
+    if tie_resolved:
+        confidence = min(confidence, 75)
 
     return best_event, confidence
 
 
-def calculate_trust_score(
-    text,
-    source,
-    event_confidence
-):
+def calculate_trust_score(text, source, event_confidence):
     """
-    Lightweight explainable trust score.
+    Lightweight heuristic trust score.
+    This is not independent source verification.
     """
-
     score = 40
 
-    # Source reliability
-    trusted_sources = [
-        "IMD",
-        "Weather API",
-        "Government Dataset",
-        "Official Source"
-    ]
+    normalized_source = (source or "").strip().casefold()
 
-    if source in trusted_sources:
+    trusted_sources = {
+        "imd",
+        "weather api",
+        "government dataset",
+        "official source",
+    }
+
+    if normalized_source in trusted_sources:
         score += 30
-
-    elif source == "Citizen Report":
+    elif normalized_source == "citizen report":
         score += 15
-
-    elif source == "Social Media":
+    elif normalized_source == "social media":
         score += 5
 
-    # Event classification confidence
     score += int(event_confidence * 0.2)
 
-    # Detailed reports get a small boost
-    if len(text) > 50:
+    if len((text or "").strip()) > 50:
         score += 5
 
     return min(score, 100)
 
 
 def analyze_report(text, source):
-
     event_type, confidence = classify_event(text)
 
     trust_score = calculate_trust_score(
