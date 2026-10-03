@@ -10,7 +10,6 @@ from models import Base, WeatherReport
 from ai_engine import analyze_report
 from event_engine import create_event_summary
 from ingestion.source_manager import collect_weather
-
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -39,9 +38,26 @@ app.add_middleware(
 )
 
 
-# Request model for verification updates
 class VerificationUpdate(BaseModel):
     status: Literal["Verified", "Rejected", "Under Review"]
+
+
+def parse_observed_at(value):
+    """Convert an ISO observation timestamp to naive UTC for SQLite."""
+    if not value:
+        return None
+
+    if isinstance(value, datetime):
+        observed = value
+    else:
+        observed = datetime.fromisoformat(
+            str(value).replace("Z", "+00:00")
+        )
+
+    if observed.tzinfo is not None:
+        observed = observed.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return observed
 
 
 @app.get("/")
@@ -75,7 +91,6 @@ def create_report(
     text = report["text"]
     source = report["source"]
 
-    # AI analysis
     analysis = analyze_report(text, source)
 
     new_report = WeatherReport(
@@ -107,14 +122,12 @@ def ingest_weather(db: Session = Depends(get_db)):
     analyze them, and store them in the database.
     """
 
-    # Fetch and preprocess weather from configured cities
     collection = collect_weather()
 
     errors = list(collection["errors"])
     inserted_reports = []
     skipped = 0
 
-    # Use naive UTC to match the existing database timestamp column
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     cutoff = now - timedelta(minutes=15)
 
@@ -125,7 +138,6 @@ def ingest_weather(db: Session = Depends(get_db)):
             text = report["text"]
             source = report["source"]
 
-            # Avoid inserting identical reports repeatedly
             existing = db.query(WeatherReport).filter(
                 WeatherReport.city == city,
                 WeatherReport.state == state,
@@ -139,7 +151,6 @@ def ingest_weather(db: Session = Depends(get_db)):
                 continue
 
             try:
-                # Analyze report using existing AI engine
                 analysis = analyze_report(text, source)
 
                 new_report = WeatherReport(
@@ -151,7 +162,13 @@ def ingest_weather(db: Session = Depends(get_db)):
                     source=source,
                     event_type=analysis["event_type"],
                     trust_score=analysis["trust_score"],
-                    verification_status="Pending"
+                    verification_status="Pending",
+
+                    # Newly added structured weather fields
+                    weather_data=report.get("weather_data"),
+                    observed_at=parse_observed_at(
+                        report.get("observed_at")
+                    )
                 )
 
                 db.add(new_report)
@@ -163,7 +180,11 @@ def ingest_weather(db: Session = Depends(get_db)):
                     "state": new_report.state,
                     "event_type": new_report.event_type,
                     "trust_score": new_report.trust_score,
-                    "verification_status": new_report.verification_status
+                    "verification_status": new_report.verification_status,
+                    "observed_at": (
+                        new_report.observed_at.isoformat()
+                        if new_report.observed_at else None
+                    )
                 })
 
             except Exception as error:
@@ -173,10 +194,9 @@ def ingest_weather(db: Session = Depends(get_db)):
                     "error": str(error)
                 })
 
-        # Save all successfully processed reports
         db.commit()
 
-    except Exception as error:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=500,
@@ -227,6 +247,4 @@ def update_verification(
 @app.get("/events")
 def get_events(db: Session = Depends(get_db)):
     reports = db.query(WeatherReport).all()
-
-    # create_event_summary already returns the complete response dictionary
     return create_event_summary(reports)
