@@ -1,9 +1,15 @@
+
 from collections import defaultdict
+from difflib import SequenceMatcher
 import re
 
 
+NEAR_DUPLICATE_THRESHOLD = 0.72
+MIN_TEXT_LENGTH = 20
+
+
 def normalize_text(text):
-    """Normalize text to help identify exact duplicate reports."""
+    """Normalize text to identify exact duplicate reports."""
     if not text:
         return ""
 
@@ -11,6 +17,63 @@ def normalize_text(text):
     text = re.sub(r"\s+", " ", text)
 
     return text
+
+
+def normalize_for_similarity(text):
+    """Normalize text for near-duplicate comparison."""
+    if not text:
+        return ""
+
+    text = text.casefold()
+    text = re.sub(r"[^\w\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+def calculate_similarity(text1, text2):
+    """Return text similarity as a percentage."""
+    normalized1 = normalize_for_similarity(text1)
+    normalized2 = normalize_for_similarity(text2)
+
+    if not normalized1 or not normalized2:
+        return 0
+
+    return SequenceMatcher(
+        None, normalized1, normalized2
+    ).ratio()
+
+
+def find_near_duplicates(reports):
+    """Find potential near-duplicate pairs without removing reports."""
+    potential_duplicates = []
+
+    for i in range(len(reports)):
+        for j in range(i + 1, len(reports)):
+            report1 = reports[i]
+            report2 = reports[j]
+
+            text1 = report1.text or ""
+            text2 = report2.text or ""
+
+            # Skip very short reports to reduce false matches.
+            if (
+                len(normalize_for_similarity(text1)) < MIN_TEXT_LENGTH
+                or len(normalize_for_similarity(text2)) < MIN_TEXT_LENGTH
+            ):
+                continue
+
+            similarity = calculate_similarity(text1, text2)
+
+            if similarity >= NEAR_DUPLICATE_THRESHOLD:
+                potential_duplicates.append({
+                    "report_id_1": report1.id,
+                    "report_id_2": report2.id,
+                    "similarity": round(similarity * 100, 2),
+                    "status": "POTENTIAL_DUPLICATE"
+                })
+
+    return potential_duplicates
 
 
 def create_event_summary(reports):
@@ -49,6 +112,9 @@ def create_event_summary(reports):
         submitted_report_count = len(group)
         report_count = len(unique_reports)
         duplicate_count = submitted_report_count - report_count
+
+        # Detect near duplicates among exact-text unique reports.
+        near_duplicate_pairs = find_near_duplicates(unique_reports)
 
         avg_trust = sum(
             report.trust_score or 0
@@ -98,6 +164,8 @@ def create_event_summary(reports):
             "report_count": report_count,
             "submitted_report_count": submitted_report_count,
             "duplicate_count": duplicate_count,
+            "near_duplicate_count": len(near_duplicate_pairs),
+            "near_duplicate_pairs": near_duplicate_pairs,
             "confidence": confidence,
             "latitude": latitude,
             "longitude": longitude,
