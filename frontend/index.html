@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>VARUNA | Weather Intelligence Grid</title>
+
+    <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+
+            <div class="logo">
+                <div class="logo-mark">V</div>
+
+                <div>
+                    <h1>VARUNA</h1>
+                    <span>WEATHER INTELLIGENCE GRID</span>
+                </div>
+            </div>
+
+            <div class="status">
+                <span class="status-dot"></span>
+                LIVE SYSTEM
+            </div>
+
+            <nav>
+                <button class="nav-item active">
+                    ◉ Overview
+                </button>
+
+                <button class="nav-item">
+                    ◈ Live Events
+                </button>
+
+                <button class="nav-item">
+                    ◇ Verification
+                </button>
+
+                <button class="nav-item">
+                    ▣ Analytics
+                </button>
+            </nav>
+
+            <div class="sidebar-bottom">
+
+                <div class="system-card">
+                    <span>DATA SOURCES</span>
+
+                    <div>
+                        <strong>08</strong>
+                        <small>ACTIVE</small>
+                    </div>
+                </div>
+
+                <div class="system-card">
+                    <span>LAST SYNC</span>
+                    <strong id="lastSync">--:--:--</strong>
+                </div>
+
+            </div>
+
+        </aside>
+
+
+        <!-- MAIN -->
+        <main class="main">
+
+            <header class="topbar">
+
+                <div>
+                    <p class="eyebrow">NATIONAL WEATHER MONITORING</p>
+
+                    <h2>
+                        India Situation Room
+                    </h2>
+                </div>
+
+                <div class="top-actions">
+
+                    <div class="live-indicator">
+                        <span></span>
+                        LIVE
+                    </div>
+
+                    <button class="admin-btn">
+                        ADMIN PANEL
+                    </button>
+
+                </div>
+
+            </header>
+
+
+            <!-- STAT CARDS -->
+            <section class="stats">
+
+                <div class="stat-card">
+                    <span>ACTIVE EVENTS</span>
+                    <strong id="activeEvents">0</strong>
+                    <small>Across monitored regions</small>
+                </div>
+
+                <div class="stat-card">
+                    <span>REPORTS ANALYZED</span>
+                    <strong id="reportsAnalyzed">0</strong>
+                    <small>Multi-source intelligence</small>
+                </div>
+
+                <div class="stat-card">
+                    <span>VERIFIED</span>
+                    <strong id="verifiedReports">0%</strong>
+                    <small>AI confidence</small>
+                </div>
+
+                <div class="stat-card alert">
+                    <span>HIGH SEVERITY</span>
+                    <strong id="highSeverity">0</strong>
+                    <small>Requires attention</small>
+                </div>
+
+            </section>
+
+
+            <!-- MAP + EVENT PANEL -->
+            <section class="workspace">
+
+                <div class="map-panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <span class="panel-label">LIVE GEOSPATIAL VIEW</span>
+                            <h3>Weather Events — India</h3>
+                        </div>
+
+                        <div class="map-legend">
+                            <span>
+                                <i class="red"></i>
+                                Active
+                            </span>
+
+                            <span>
+                                <i class="orange"></i>
+                                Developing
+                            </span>
+                        </div>
+
+                    </div>
+
+                    <div id="map"></div>
+
+                </div>
+
+
+                <!-- EVENTS -->
+                <div class="events-panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <span class="panel-label">
+                                REAL-TIME INTELLIGENCE
+                            </span>
+
+                            <h3>Active Events</h3>
+                        </div>
+
+                        <span class="event-count" id="eventCount">
+                            0 EVENTS
+                        </span>
+
+                    </div>
+
+                    <div id="eventList" class="event-list">
+
+                        <div class="empty">
+                            Loading events...
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- BOTTOM -->
+            <section class="bottom-grid">
+
+                <div class="activity-panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <span class="panel-label">
+                                SYSTEM ACTIVITY
+                            </span>
+
+                            <h3>Incoming Intelligence</h3>
+                        </div>
+
+                    </div>
+
+                    <div id="activityList">
+
+                        <div class="activity">
+                            <span class="activity-dot"></span>
+
+                            <div>
+                                <strong>VARUNA system initialized</strong>
+                                <small>Waiting for incoming reports</small>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="intelligence-panel">
+
+                    <span class="panel-label">
+                        AI INTELLIGENCE
+                    </span>
+
+                    <h3>Event Verification Engine</h3>
+
+                    <div class="verification-score">
+
+                        <div class="score-circle">
+                            <strong>AI</strong>
+                        </div>
+
+                        <div>
+                            <strong>Multi-source verification</strong>
+
+                            <p>
+                                Reports are classified, correlated,
+                                deduplicated and assigned a trust score.
+                            </p>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script src="app.js"></script>
+
+</body>
+
+</html>
