@@ -199,7 +199,7 @@ def find_near_duplicates(reports):
 
 def create_event_summary(reports):
     """
-    Group reports by city and event type and generate event summaries.
+    Group reports by city, state and event type and generate summaries.
 
     Exact duplicates are counted separately. Near duplicates are flagged
     but are not removed from the report counts.
@@ -210,7 +210,7 @@ def create_event_summary(reports):
     """
     grouped_reports = {}
 
-    # Group reports by city and event type.
+    # Group reports by city, state and event type.
     for report in reports:
         city = get_value(report, "city", "Unknown") or "Unknown"
         event_type = (
@@ -238,6 +238,7 @@ def create_event_summary(reports):
 
     for group in grouped_reports.values():
         city = group["city"]
+        state = group["state"]
         event_type = group["event_type"]
         submitted_reports = group["reports"]
 
@@ -271,7 +272,8 @@ def create_event_summary(reports):
 
         for report in submitted_reports:
             verification_status = (
-                get_value(report, "verification_status", "Pending") or "Pending"
+                get_value(report, "verification_status", "Pending")
+                or "Pending"
             ).strip().casefold()
 
             if verification_status == "verified":
@@ -346,6 +348,7 @@ def create_event_summary(reports):
         events.append({
             "event_id": event_id,
             "city": city,
+            "state": state,
             "event_type": event_type,
             "report_count": report_count,
             "submitted_report_count": submitted_report_count,

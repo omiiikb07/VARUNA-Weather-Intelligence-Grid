@@ -333,9 +333,37 @@ def update_verification(
     }
 
 
-# Get Event Summary
+
+# Get Event Summary with Optional Filters
 @app.get("/events")
-def get_events(db: Session = Depends(get_db)):
-    reports = db.query(WeatherReport).all()
+def get_events(
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    event_type: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(WeatherReport)
+
+    # Filter by city
+    if city and city.strip():
+        query = query.filter(
+            WeatherReport.city.ilike(f"%{city.strip()}%")
+        )
+
+    # Filter by state
+    if state and state.strip():
+        query = query.filter(
+            WeatherReport.state.ilike(f"%{state.strip()}%")
+        )
+
+    # Filter by event type
+    if event_type and event_type.strip():
+        query = query.filter(
+            WeatherReport.event_type.ilike(f"%{event_type.strip()}%")
+        )
+
+    reports = query.order_by(
+        WeatherReport.timestamp.desc()
+    ).all()
 
     return create_event_summary(reports)
