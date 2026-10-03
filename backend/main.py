@@ -1,9 +1,9 @@
 
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 
 from database import engine, get_db
 from models import Base, WeatherReport
@@ -24,6 +24,7 @@ app = FastAPI(
 )
 
 
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -38,12 +39,13 @@ app.add_middleware(
 )
 
 
+# Verification Request Model
 class VerificationUpdate(BaseModel):
     status: Literal["Verified", "Rejected", "Under Review"]
 
 
+# Convert observation timestamp to naive UTC for SQLite
 def parse_observed_at(value):
-    """Convert an ISO observation timestamp to naive UTC for SQLite."""
     if not value:
         return None
 
@@ -55,11 +57,14 @@ def parse_observed_at(value):
         )
 
     if observed.tzinfo is not None:
-        observed = observed.astimezone(timezone.utc).replace(tzinfo=None)
+        observed = observed.astimezone(
+            timezone.utc
+        ).replace(tzinfo=None)
 
     return observed
 
 
+# Home Endpoint
 @app.get("/")
 def home():
     return {
@@ -69,6 +74,7 @@ def home():
     }
 
 
+# Health Check Endpoint
 @app.get("/health")
 def health():
     return {
@@ -77,12 +83,89 @@ def health():
     }
 
 
+# Get Reports with Optional Filters
 @app.get("/reports")
-def get_reports(db: Session = Depends(get_db)):
-    reports = db.query(WeatherReport).all()
+def get_reports(
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    event_type: Optional[str] = None,
+    verification_status: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(WeatherReport)
+
+    # Validate date range
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="start_date cannot be after end_date"
+        )
+
+    # Filter by city
+    if city and city.strip():
+        query = query.filter(
+            WeatherReport.city.ilike(
+                f"%{city.strip()}%"
+            )
+        )
+
+    # Filter by state
+    if state and state.strip():
+        query = query.filter(
+            WeatherReport.state.ilike(
+                f"%{state.strip()}%"
+            )
+        )
+
+    # Filter by event type
+    if event_type and event_type.strip():
+        query = query.filter(
+            WeatherReport.event_type.ilike(
+                f"%{event_type.strip()}%"
+            )
+        )
+
+    # Filter by verification status
+    if verification_status and verification_status.strip():
+        query = query.filter(
+            WeatherReport.verification_status.ilike(
+                verification_status.strip()
+            )
+        )
+
+    # Filter by start date (inclusive)
+    if start_date:
+        start_datetime = datetime.combine(
+            start_date,
+            datetime.min.time()
+        )
+
+        query = query.filter(
+            WeatherReport.timestamp >= start_datetime
+        )
+
+    # Filter by end date (inclusive)
+    if end_date:
+        end_datetime = datetime.combine(
+            end_date + timedelta(days=1),
+            datetime.min.time()
+        )
+
+        query = query.filter(
+            WeatherReport.timestamp < end_datetime
+        )
+
+    # Newest reports first
+    reports = query.order_by(
+        WeatherReport.timestamp.desc()
+    ).all()
+
     return reports
 
 
+# Create Citizen or Social Media Report
 @app.post("/reports")
 def create_report(
     report: dict,
@@ -115,6 +198,7 @@ def create_report(
     }
 
 
+# Collect and Store Weather Data
 @app.post("/ingestion/weather")
 def ingest_weather(db: Session = Depends(get_db)):
     """
@@ -138,6 +222,7 @@ def ingest_weather(db: Session = Depends(get_db)):
             text = report["text"]
             source = report["source"]
 
+            # Check for recent duplicates
             existing = db.query(WeatherReport).filter(
                 WeatherReport.city == city,
                 WeatherReport.state == state,
@@ -164,7 +249,7 @@ def ingest_weather(db: Session = Depends(get_db)):
                     trust_score=analysis["trust_score"],
                     verification_status="Pending",
 
-                    # Newly added structured weather fields
+                    # Structured weather data
                     weather_data=report.get("weather_data"),
                     observed_at=parse_observed_at(
                         report.get("observed_at")
@@ -180,10 +265,13 @@ def ingest_weather(db: Session = Depends(get_db)):
                     "state": new_report.state,
                     "event_type": new_report.event_type,
                     "trust_score": new_report.trust_score,
-                    "verification_status": new_report.verification_status,
+                    "verification_status": (
+                        new_report.verification_status
+                    ),
                     "observed_at": (
                         new_report.observed_at.isoformat()
-                        if new_report.observed_at else None
+                        if new_report.observed_at
+                        else None
                     )
                 })
 
@@ -216,6 +304,7 @@ def ingest_weather(db: Session = Depends(get_db)):
     }
 
 
+# Update Report Verification Status
 @app.patch("/reports/{report_id}/verification")
 def update_verification(
     report_id: int,
@@ -244,7 +333,9 @@ def update_verification(
     }
 
 
+# Get Event Summary
 @app.get("/events")
 def get_events(db: Session = Depends(get_db)):
     reports = db.query(WeatherReport).all()
+
     return create_event_summary(reports)
