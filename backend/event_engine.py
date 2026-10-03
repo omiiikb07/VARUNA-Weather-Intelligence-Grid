@@ -61,6 +61,9 @@ def calculate_distance_km(lat1, lon1, lat2, lon2):
         + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
     )
 
+    # Protect against minor floating-point rounding errors
+    a = max(0, min(1, a))
+
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return earth_radius * c
 
@@ -86,7 +89,7 @@ def find_near_duplicates(reports):
             ):
                 continue
 
-            # Require compatible states when both are present.
+            # Require compatible states when both are present
             state1 = (report1.state or "").strip().casefold()
             state2 = (report2.state or "").strip().casefold()
 
@@ -98,7 +101,7 @@ def find_near_duplicates(reports):
             if similarity < NEAR_DUPLICATE_THRESHOLD:
                 continue
 
-            # Compare timestamps if both are available.
+            # Compare timestamps if both are available
             time_difference_minutes = None
             timestamp1 = report1.timestamp
             timestamp2 = report2.timestamp
@@ -121,7 +124,7 @@ def find_near_duplicates(reports):
                 if time_difference_minutes > MAX_TIME_HOURS * 60:
                     continue
 
-            # Compare coordinates if both reports have GPS data.
+            # Compare coordinates if both reports have GPS data
             distance_km = None
 
             coords1 = (report1.latitude, report1.longitude)
@@ -165,6 +168,7 @@ def find_near_duplicates(reports):
 
 
 def create_event_summary(reports):
+    """Group reports into events with duplicate and verification counts."""
     groups = defaultdict(list)
 
     for report in reports:
@@ -180,10 +184,11 @@ def create_event_summary(reports):
         unique_reports = []
         seen_reports = set()
 
+        # Detect exact duplicates
         for index, report in enumerate(group):
             normalized = normalize_text(report.text)
 
-            # Keep empty reports separate.
+            # Keep empty reports separate
             if not normalized:
                 duplicate_key = f"empty-{report.id or index}"
             else:
@@ -197,16 +202,18 @@ def create_event_summary(reports):
         report_count = len(unique_reports)
         duplicate_count = submitted_report_count - report_count
 
-        # Detect near duplicates without removing the reports.
+        # Detect near duplicates without removing reports
         near_duplicate_pairs = find_near_duplicates(
             unique_reports
         )
 
+        # Calculate average trust using exact-unique reports
         avg_trust = sum(
             report.trust_score or 0
             for report in unique_reports
         ) / report_count
 
+        # Calculate average coordinates
         valid_coordinates = [
             (report.latitude, report.longitude)
             for report in unique_reports
@@ -227,16 +234,44 @@ def create_event_summary(reports):
             latitude = None
             longitude = None
 
+        # Collect sources
         sources = sorted({
             report.source
             for report in unique_reports
             if report.source
         })
 
+        # Heuristic event confidence, not a probability
         confidence = min(
             int(avg_trust + min(report_count * 2, 15)),
             99
         )
+
+        # Count verification statuses from all submitted reports
+        verification_counts = {
+            "verified_report_count": sum(
+                (r.verification_status or "").casefold() == "verified"
+                for r in group
+            ),
+            "pending_report_count": sum(
+                (r.verification_status or "").casefold() == "pending"
+                for r in group
+            ),
+            "under_review_report_count": sum(
+                (r.verification_status or "").casefold() == "under review"
+                for r in group
+            ),
+            "rejected_report_count": sum(
+                (r.verification_status or "").casefold() == "rejected"
+                for r in group
+            )
+        }
+
+        # Routine or unclassified observations are not active hazards
+        if event_type.casefold() in ("unknown", "unclassified"):
+            event_status = "OBSERVATION"
+        else:
+            event_status = "ACTIVE"
 
         events.append({
             "event_id": (
@@ -250,11 +285,23 @@ def create_event_summary(reports):
             "duplicate_count": duplicate_count,
             "near_duplicate_count": len(near_duplicate_pairs),
             "near_duplicate_pairs": near_duplicate_pairs,
+            "verified_report_count": verification_counts[
+                "verified_report_count"
+            ],
+            "pending_report_count": verification_counts[
+                "pending_report_count"
+            ],
+            "under_review_report_count": verification_counts[
+                "under_review_report_count"
+            ],
+            "rejected_report_count": verification_counts[
+                "rejected_report_count"
+            ],
             "confidence": confidence,
             "latitude": latitude,
             "longitude": longitude,
             "sources": sources,
-            "status": "ACTIVE"
+            "status": event_status
         })
 
     return events
