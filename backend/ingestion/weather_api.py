@@ -74,7 +74,7 @@ def fetch_weather(city, state, latitude, longitude):
         "latitude": latitude,
         "longitude": longitude,
         "current": ",".join(CURRENT_FIELDS),
-        "timezone": "auto",
+        "timezone": "UTC",
     }
 
     url = f"{BASE_URL}?{urlencode(params)}"
