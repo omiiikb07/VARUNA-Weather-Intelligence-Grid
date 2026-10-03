@@ -2,6 +2,7 @@
 import re
 
 
+# Severe weather event keywords with weighted scores.
 EVENT_KEYWORDS = {
     "Flood": [
         ("roads underwater", 5),
@@ -61,6 +62,40 @@ EVENT_KEYWORDS = {
 }
 
 
+# Routine weather conditions.
+# These are observations, not necessarily severe events.
+OBSERVATION_KEYWORDS = {
+    "Clear Sky": [
+        "clear sky",
+        "clear skies",
+    ],
+    "Mainly Clear": [
+        "mainly clear",
+        "mostly clear",
+    ],
+    "Partly Cloudy": [
+        "partly cloudy",
+        "partly clouded",
+    ],
+    "Overcast": [
+        "overcast",
+    ],
+    "Light Rain": [
+        "light rain",
+        "light rainfall",
+        "drizzle",
+    ],
+    "Moderate Rain": [
+        "moderate rain",
+        "moderate rainfall",
+    ],
+    "Snow": [
+        "snowfall",
+        "snow",
+    ],
+}
+
+
 def normalize_text(text: str) -> str:
     """Normalize text for consistent keyword matching."""
     text = (text or "").casefold()
@@ -70,8 +105,12 @@ def normalize_text(text: str) -> str:
 
 def classify_event(text: str):
     """
-    Classify a weather report using weighted keywords.
-    This is a heuristic classifier, not a trained ML model.
+    Classify severe weather events and routine weather
+    observations using weighted keyword matching.
+
+    This is a rule-based heuristic classifier,
+    not a trained machine learning model.
+    Confidence is a heuristic score, not a probability.
     """
     normalized = normalize_text(text)
 
@@ -80,6 +119,7 @@ def classify_event(text: str):
 
     scores = {}
 
+    # Score each severe weather event.
     for event, keywords in EVENT_KEYWORDS.items():
         matches = []
 
@@ -97,8 +137,8 @@ def classify_event(text: str):
                     (match.start(), match.end(), weight)
                 )
 
-        # Prefer longer phrases to avoid counting a phrase
-        # and its contained word separately.
+        # Prefer longer phrases to avoid counting
+        # overlapping phrases more than once.
         matches.sort(
             key=lambda item: item[1] - item[0],
             reverse=True
@@ -128,14 +168,8 @@ def classify_event(text: str):
     best_event, best_score = ranked[0]
     second_score = ranked[1][1]
 
-    if best_score == 0:
-        return "Unknown", 30
-
-    tie_resolved = False
-
-    # Resolve a tie in favour of Flood only when the
-    # report explicitly contains a flood-related indicator.
-    if best_score == second_score:
+    # Resolve ties only when there is a clear flood indicator.
+    if best_score > 0 and best_score == second_score:
         tied_events = [
             event for event, score in ranked
             if score == best_score
@@ -161,31 +195,49 @@ def classify_event(text: str):
         )
 
         if "Flood" in tied_events and has_flood_indicator:
-            best_event = "Flood"
-            tie_resolved = True
-        else:
-            return "Unknown", 45
+            return "Flood", 75
 
-    score_gap = best_score - second_score
+        return "Unknown", 45
 
-    confidence = min(
-        55
-        + min(best_score * 5, 25)
-        + min(score_gap * 3, 12),
-        92
-    )
+    # Strong severe-weather matches take priority
+    # over routine weather observations.
+    if best_score >= 3:
+        score_gap = best_score - second_score
 
-    # A rule-based tie-break is less certain than a clear match.
-    if tie_resolved:
-        confidence = min(confidence, 75)
+        confidence = min(
+            55
+            + min(best_score * 5, 25)
+            + min(score_gap * 3, 12),
+            92
+        )
 
-    return best_event, confidence
+        return best_event, confidence
+
+    # Classify routine weather conditions if no
+    # strong severe-weather event was detected.
+    for condition, keywords in OBSERVATION_KEYWORDS.items():
+        for keyword in keywords:
+            pattern = (
+                r"(?<!\w)"
+                + re.escape(keyword)
+                + r"(?!\w)"
+            )
+
+            if re.search(pattern, normalized):
+                return condition, 75
+
+    # Weak generic keywords are not enough to
+    # classify a severe weather event.
+    return "Unknown", 30
 
 
 def calculate_trust_score(text, source, event_confidence):
     """
-    Lightweight heuristic trust score.
-    This is not independent source verification.
+    Calculate a lightweight heuristic trust score.
+
+    This is not independent source verification
+    and does not represent the factual accuracy
+    or probability of a report.
     """
     score = 40
 
@@ -198,10 +250,15 @@ def calculate_trust_score(text, source, event_confidence):
         "official source",
     }
 
-    if normalized_source in trusted_sources:
+    if (
+        normalized_source in trusted_sources
+        or normalized_source.startswith("weather api")
+    ):
         score += 30
+
     elif normalized_source == "citizen report":
         score += 15
+
     elif normalized_source == "social media":
         score += 5
 
@@ -214,6 +271,10 @@ def calculate_trust_score(text, source, event_confidence):
 
 
 def analyze_report(text, source):
+    """
+    Analyze a weather report and return its event type,
+    heuristic confidence and heuristic trust score.
+    """
     event_type, confidence = classify_event(text)
 
     trust_score = calculate_trust_score(

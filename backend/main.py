@@ -228,9 +228,5 @@ def update_verification(
 def get_events(db: Session = Depends(get_db)):
     reports = db.query(WeatherReport).all()
 
-    events = create_event_summary(reports)
-
-    return {
-        "total_events": len(events),
-        "events": events
-    }
+    # create_event_summary already returns the complete response dictionary
+    return create_event_summary(reports)
