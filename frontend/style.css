@@ -1080,3 +1080,362 @@ select:focus-visible {
         height: 340px;
     }
 }
+
+
+/* -------------------------
+   VARUNA UI POLISH
+   Additive overrides: preserves existing HTML and JavaScript hooks.
+------------------------- */
+
+:root {
+    --bg: #080f17;
+    --panel: #0d1822;
+    --panel-light: #111f2b;
+    --border: #203342;
+    --text: #e8eef5;
+    --muted: #8b9aa8;
+    --teal: #61dfc1;
+    --teal-dark: #12352f;
+    --red: #ff7777;
+    --orange: #f0c36b;
+    --blue: #83c2ff;
+}
+
+body {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+button, input, select {
+    transition: border-color .18s ease, background-color .18s ease,
+                color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px #55d6b722;
+}
+
+.sidebar {
+    background: linear-gradient(180deg, #0b151e 0%, #09131c 100%);
+}
+
+.logo-mark {
+    box-shadow: inset 0 0 18px #55d6b711, 0 5px 18px #00000022;
+}
+
+.system-status {
+    width: fit-content;
+    padding: 7px 10px;
+    border: 1px solid #203342;
+    border-radius: 999px;
+    background: #101d27;
+}
+
+.nav-item {
+    min-height: 40px;
+}
+
+.nav-item:hover {
+    transform: translateX(2px);
+}
+
+.nav-item.active {
+    box-shadow: inset 2px 0 0 var(--teal);
+}
+
+.main {
+    background:
+        radial-gradient(ellipse at 85% 0%, #12352f1c 0%, transparent 38%),
+        var(--bg);
+}
+
+.topbar {
+    padding-bottom: 17px;
+    border-bottom: 1px solid #20303d;
+}
+
+.topbar h2 {
+    line-height: 1.25;
+}
+
+.live-indicator {
+    padding: 7px 10px;
+    border: 1px solid #236c604d;
+    border-radius: 999px;
+    background: #12352f55;
+    white-space: nowrap;
+}
+
+.live-indicator span {
+    animation: varuna-pulse 2s ease-in-out infinite;
+}
+
+@keyframes varuna-pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 #55d6b733; }
+    50% { opacity: .7; box-shadow: 0 0 0 5px #55d6b700; }
+}
+
+.admin-btn,
+.primary-btn,
+.secondary-btn,
+.save-btn {
+    min-height: 35px;
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+
+.admin-btn:active,
+.primary-btn:active,
+.secondary-btn:active,
+.save-btn:active,
+.nav-item:active {
+    transform: translateY(1px);
+}
+
+.stat-card,
+.verification-stat,
+.panel {
+    box-shadow: 0 8px 24px #00000012;
+}
+
+.stat-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(145deg, #0f1c27 0%, var(--panel) 70%);
+}
+
+.stat-card::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: #55d6b755;
+    content: "";
+}
+
+.stat-card.alert::before {
+    background: var(--orange);
+}
+
+.stat-card > strong {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.6px;
+}
+
+.panel {
+    background: linear-gradient(145deg, #0f1b26 0%, var(--panel) 70%);
+}
+
+.panel-header h3,
+.panel > h3,
+.section-heading h3 {
+    line-height: 1.35;
+}
+
+.map {
+    box-shadow: inset 0 0 0 1px #ffffff05;
+}
+
+.leaflet-popup-content-wrapper {
+    border: 1px solid #29404f;
+    border-radius: 9px;
+    box-shadow: 0 10px 28px #00000066;
+}
+
+.leaflet-popup-tip {
+    box-shadow: 2px 2px 8px #00000033;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+    color: #a9bac7;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+    color: var(--teal);
+}
+
+.event-card {
+    position: relative;
+}
+
+.event-card:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+}
+
+.event-name {
+    line-height: 1.4;
+}
+
+.event-tag {
+    border: 1px solid #ffffff08;
+}
+
+.verification-toolbar input,
+.verification-toolbar select,
+.status-select {
+    min-height: 38px;
+}
+
+.verification-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.verification-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.verification-table td {
+    overflow-wrap: anywhere;
+}
+
+.status-select {
+    max-width: 120px;
+}
+
+.bar-track {
+    border: 1px solid #ffffff08;
+}
+
+.bar-fill {
+    transition: width .35s ease;
+}
+
+.toast {
+    box-shadow: 0 12px 32px #00000055;
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}
+
+/* Tablet and compact laptop refinements */
+@media (max-width: 1100px) {
+    .stats,
+    .verification-summary {
+        gap: 10px;
+    }
+
+    .main {
+        padding: 19px;
+    }
+
+    .map {
+        height: 330px;
+    }
+}
+
+/* Mobile refinements */
+@media (max-width: 800px) {
+    .sidebar {
+        position: static;
+    }
+
+    .logo {
+        margin-left: 2px;
+    }
+
+    .navigation {
+        gap: 5px;
+    }
+
+    .nav-item {
+        flex: 1 1 calc(50% - 5px);
+        justify-content: flex-start;
+        min-height: 38px;
+        padding: 9px 11px;
+    }
+
+    .nav-item:hover {
+        transform: none;
+    }
+
+    .topbar {
+        align-items: flex-start;
+    }
+
+    .verification-table-wrap {
+        border-radius: 7px;
+    }
+}
+
+@media (max-width: 500px) {
+    .main {
+        padding: 12px;
+    }
+
+    .topbar {
+        gap: 12px;
+        margin-bottom: 17px;
+    }
+
+    .topbar h2 {
+        font-size: 19px;
+    }
+
+    .top-actions {
+        gap: 8px;
+    }
+
+    .admin-btn,
+    .primary-btn,
+    .secondary-btn {
+        padding: 9px 10px;
+        font-size: 9px;
+    }
+
+    .stat-card,
+    .verification-stat,
+    .panel {
+        padding: 12px;
+    }
+
+    .stat-card > span {
+        line-height: 1.4;
+    }
+
+    .stat-card > strong,
+    .verification-stat strong {
+        font-size: 20px;
+    }
+
+    .panel-header {
+        align-items: flex-start;
+    }
+
+    .map-hint {
+        max-width: 115px;
+        text-align: right;
+        line-height: 1.4;
+    }
+
+    .event-card {
+        padding: 10px;
+    }
+
+    .verification-toolbar {
+        gap: 8px;
+    }
+
+    .verification-toolbar input {
+        min-width: 0;
+    }
+
+    .toast {
+        right: 12px;
+        bottom: 12px;
+    }
+}

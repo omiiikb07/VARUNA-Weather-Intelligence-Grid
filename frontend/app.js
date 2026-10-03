@@ -19,6 +19,7 @@ let liveMap = null;
 let overviewMarkers = null;
 
 let liveMarkers = null;
+let eventMarkerLookup = new Map();
 
 let toastTimer = null;
 
@@ -307,172 +308,209 @@ function createMap(elementId) {
 
 
 function initializeMaps() {
-
     overviewMap = createMap("map");
-
     liveMap = createMap("liveMap");
 
+    if (overviewMap) overviewMarkers = L.layerGroup().addTo(overviewMap);
+    if (liveMap) liveMarkers = L.layerGroup().addTo(liveMap);
 
+    addMapLegend("map");
+    addMapLegend("liveMap");
 
-    if (overviewMap) {
-
-        overviewMarkers = L.layerGroup().addTo(overviewMap);
-
+    const overviewNote = document.querySelector("#overviewPage .map-note");
+    const liveNote = document.querySelector("#livePage .map-note");
+    if (overviewNote) {
+        overviewNote.textContent = "Markers use report coordinates when available; otherwise, supported cities use approximate city-center locations. Severity is estimated from event type.";
     }
-
-
-
-    if (liveMap) {
-
-        liveMarkers = L.layerGroup().addTo(liveMap);
-
+    if (liveNote) {
+        liveNote.textContent = "Some markers use approximate city-center locations when GPS coordinates are unavailable. Severity is a prototype estimate based on event type.";
     }
-
 }
 
 
 
 function hasCoordinates(event) {
-
-    return (
-
-        Number.isFinite(Number(event.latitude)) &&
-
-        Number.isFinite(Number(event.longitude)) &&
-
-        event.latitude !== null &&
-
-        event.longitude !== null
-
-    );
-
-}
-
-
-
-function eventColor(event) {
-
-    const type = String(event.event_type || "").toLowerCase();
-
-
-
-    if (type.includes("flood")) return "#ff5d5d";
-
-    if (type.includes("heat")) return "#f0ad4e";
-
-    if (type.includes("storm")) return "#a88bff";
-
-    if (type.includes("rain")) return "#55a9e8";
-
-
-
-    return "#55d6b7";
-
-}
-
-
-
-function focusEventOnMap(map, event) {
-
-    if (!map || !hasCoordinates(event)) {
-
-        showToast("No GPS coordinates are available for this event.", true);
-
-        return;
-
+    if (event.latitude === null || event.latitude === undefined ||
+        event.longitude === null || event.longitude === undefined ||
+        String(event.latitude).trim() === "" ||
+        String(event.longitude).trim() === "") {
+        return false;
     }
 
+    const latitude = Number(event.latitude);
+    const longitude = Number(event.longitude);
 
-
-    map.setView(
-
-        [Number(event.latitude), Number(event.longitude)],
-
-        10
-
-    );
-
+    return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+        latitude >= -90 && latitude <= 90 &&
+        longitude >= -180 && longitude <= 180;
 }
 
+// Approximate city-center coordinates are only a display fallback when GPS is absent.
+// These are not report-specific or precise locations.
+const APPROXIMATE_CITY_COORDINATES = {
+    "ahmedabad": [23.0225, 72.5714],
+    "bengaluru": [12.9716, 77.5946],
+    "bangalore": [12.9716, 77.5946],
+    "bhopal": [23.2599, 77.4126],
+    "chandigarh": [30.7333, 76.7794],
+    "chennai": [13.0827, 80.2707],
+    "coimbatore": [11.0168, 76.9558],
+    "delhi": [28.6139, 77.2090],
+    "new delhi": [28.6139, 77.2090],
+    "guwahati": [26.1445, 91.7362],
+    "hyderabad": [17.3850, 78.4867],
+    "indore": [22.7196, 75.8577],
+    "jaipur": [26.9124, 75.7873],
+    "kochi": [9.9312, 76.2673],
+    "kolkata": [22.5726, 88.3639],
+    "lucknow": [26.8467, 80.9462],
+    "mumbai": [19.0760, 72.8777],
+    "mysore": [12.2958, 76.6394],
+    "mysuru": [12.2958, 76.6394],
+    "nagpur": [21.1458, 79.0882],
+    "pune": [18.5204, 73.8567],
+    "srinagar": [34.0837, 74.7973],
+    "thiruvananthapuram": [8.5241, 76.9366],
+    "trivandrum": [8.5241, 76.9366],
+    "visakhapatnam": [17.6868, 83.2185]
+};
 
+function getEventLocation(event) {
+    if (hasCoordinates(event)) {
+        return {
+            coordinates: [Number(event.latitude), Number(event.longitude)],
+            approximate: false
+        };
+    }
 
-function addEventMarkers(map, markerLayer, eventList) {
+    const city = String(event.city || "").trim().toLowerCase().replace(/\\s+/g, " ");
+    const coordinates = APPROXIMATE_CITY_COORDINATES[city];
 
+    return coordinates
+        ? { coordinates, approximate: true }
+        : null;
+}
+
+function getEstimatedSeverity(event) {
+    const type = String(event.event_type || "").toLowerCase();
+
+    if (/flood|cyclone|landslide|tsunami/.test(type)) return "Critical";
+    if (/heat ?wave|extreme heat|thunderstorm|heavy rain|severe storm|hail/.test(type)) return "High";
+    if (/rain|storm|strong wind|wind/.test(type)) return "Moderate";
+    if (/clear|cloud|sunny|partly cloudy|mainly clear/.test(type)) return "Low";
+
+    return "Unclassified";
+}
+
+function severityColor(severity) {
+    const colors = {
+        Critical: "#ff5d5d",
+        High: "#f0ad4e",
+        Moderate: "#f5cf62",
+        Low: "#55d6b7",
+        Unclassified: "#94a3b8"
+    };
+
+    return colors[severity] || colors.Unclassified;
+}
+
+function eventKey(event) {
+    return [event.city, event.state, event.event_type]
+        .map(value => String(value || "").trim().toLowerCase())
+        .join("|");
+}
+
+function focusEventOnMap(map, event, mapName) {
+    const location = getEventLocation(event);
+
+    if (!map || !location) {
+        showToast("No GPS or known city location is available for this event.", true);
+        return;
+    }
+
+    map.setView(location.coordinates, 10);
+
+    const markersForEvent = eventMarkerLookup.get(eventKey(event));
+    const marker = markersForEvent && markersForEvent[mapName];
+    if (marker) marker.openPopup();
+}
+
+function addEventMarkers(map, markerLayer, eventList, mapName) {
     if (!map || !markerLayer) return;
-
-
 
     markerLayer.clearLayers();
 
-
-
     eventList.forEach(event => {
+        const location = getEventLocation(event);
+        if (!location) return;
 
-        if (!hasCoordinates(event)) return;
+        const severity = getEstimatedSeverity(event);
+        const color = severityColor(severity);
+        const marker = L.circleMarker(location.coordinates, {
+            radius: severity === "Critical" ? 10 : 8,
+            color,
+            fillColor: color,
+            fillOpacity: 0.82,
+            weight: 2
+        });
 
-
-
-        const color = eventColor(event);
-
-
-
-        const marker = L.circleMarker(
-
-            [Number(event.latitude), Number(event.longitude)],
-
-            {
-
-                radius: 8,
-
-                color,
-
-                fillColor: color,
-
-                fillOpacity: 0.8,
-
-                weight: 2
-
-            }
-
-        );
-
-
-
+        const locationLabel = location.approximate
+            ? "Approximate city-center location"
+            : "Report coordinates";
         const popup = `
-
-            <strong>${escapeHTML(event.city)}</strong><br>
-
-            ${escapeHTML(event.event_type)}<br>
-
-            Confidence: ${escapeHTML(event.confidence)}%<br>
-
-            Unique reports: ${escapeHTML(event.report_count)}<br>
-
-            Submitted reports: ${escapeHTML(event.submitted_report_count)}
-
+            <strong>${escapeHTML(event.city || "Unknown location")}</strong><br>
+            ${escapeHTML(event.state || "")}<br>
+            Event: ${escapeHTML(event.event_type || "Unclassified")}<br>
+            Estimated severity: ${escapeHTML(severity)}<br>
+            Confidence: ${escapeHTML(event.confidence ?? "N/A")}%<br>
+            Unique reports: ${escapeHTML(event.report_count ?? 0)}<br>
+            Submitted reports: ${escapeHTML(event.submitted_report_count ?? event.report_count ?? 0)}<br>
+            <small>${locationLabel}</small>
         `;
 
-
-
         marker.bindPopup(popup);
-
         marker.addTo(markerLayer);
 
+        const key = eventKey(event);
+        if (!eventMarkerLookup.has(key)) {
+            eventMarkerLookup.set(key, {});
+        }
+        eventMarkerLookup.get(key)[mapName] = marker;
+    });
+}
+
+function addMapLegend(elementId) {
+    const mapElement = document.getElementById(elementId);
+    if (!mapElement || mapElement.parentElement.querySelector(".map-severity-legend")) return;
+
+    const legend = document.createElement("div");
+    legend.className = "map-severity-legend";
+    legend.setAttribute("aria-label", "Estimated event severity legend");
+    legend.style.cssText = "display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:9px 0 2px;font-size:11px;color:#9fb3c8;";
+
+    [
+        ["Critical", "#ff5d5d"],
+        ["High", "#f0ad4e"],
+        ["Moderate", "#f5cf62"],
+        ["Low", "#55d6b7"],
+        ["Unclassified", "#94a3b8"]
+    ].forEach(([label, color]) => {
+        const item = document.createElement("span");
+        item.style.cssText = "display:inline-flex;align-items:center;gap:5px;";
+        const dot = document.createElement("i");
+        dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};`;
+        item.append(dot, document.createTextNode(label));
+        legend.appendChild(item);
     });
 
+    mapElement.insertAdjacentElement("afterend", legend);
 }
-
-
 
 function refreshMaps() {
-
-    addEventMarkers(overviewMap, overviewMarkers, events);
-
-    addEventMarkers(liveMap, liveMarkers, events);
-
+    eventMarkerLookup = new Map();
+    addEventMarkers(overviewMap, overviewMarkers, events, "overview");
+    addEventMarkers(liveMap, liveMarkers, events, "live");
 }
-
-
 
 function resizeVisibleMap() {
 
@@ -745,17 +783,10 @@ function createEventCard(event) {
 
 
     card.addEventListener("click", () => {
-
-        focusEventOnMap(overviewMap, event);
-
-
-
-        if (!overviewMap || !hasCoordinates(event)) {
-
-            focusEventOnMap(liveMap, event);
-
-        }
-
+        const livePageActive = document.getElementById("livePage")
+            ?.classList.contains("active");
+        const targetMap = livePageActive ? liveMap : overviewMap;
+        focusEventOnMap(targetMap, event, livePageActive ? "live" : "overview");
     });
 
 
