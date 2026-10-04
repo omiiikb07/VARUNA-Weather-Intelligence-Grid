@@ -1,4 +1,3 @@
-
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON
 from datetime import datetime, timezone
 from database import Base
@@ -20,6 +19,7 @@ class WeatherReport(Base):
     event_type = Column(String, default="Unknown")
     trust_score = Column(Float, default=0)
 
+    # Human verification status
     verification_status = Column(String, default="Pending")
 
     # Original database insertion timestamp
@@ -34,3 +34,16 @@ class WeatherReport(Base):
 
     # Actual observation time reported by the source
     observed_at = Column(DateTime, nullable=True)
+
+    # Automated assessment, separate from human verification
+    assessment_status = Column(
+        String,
+        default="Uncertain",
+        nullable=False
+    )
+
+    assessment_reason = Column(Text, nullable=True)
+    assessment_score = Column(Integer, nullable=True)
+    assessment_evidence = Column(JSON, nullable=True)
+
+    assessed_at = Column(DateTime, nullable=True)

@@ -662,6 +662,10 @@ function switchView(viewName) {
 
         renderVerification();
 
+        // Start at the identifying columns when opening the review table.
+        const verificationTable = document.querySelector(".verification-table-wrap");
+        if (verificationTable) verificationTable.scrollLeft = 0;
+
     }
 
     if (viewName === "analytics") {
@@ -1036,6 +1040,13 @@ function renderActivity() {
 
 // -------------------------
 
+function assessmentClass(value) {
+    const status = String(value || "Uncertain").toLowerCase();
+    if (status === "weather-supported") return "weather-supported";
+    if (status === "source validated") return "source-validated";
+    return "uncertain";
+}
+
 function renderVerification() {
 
     const body = document.getElementById("verificationTableBody");
@@ -1052,6 +1063,10 @@ function renderVerification() {
 
         document.getElementById("statusFilter")?.value || "All";
 
+    const selectedAssessment =
+
+        document.getElementById("assessmentFilter")?.value || "All";
+
     const filteredReports = [...reports]
 
         .sort((a, b) => Number(b.id) - Number(a.id))
@@ -1063,6 +1078,12 @@ function renderVerification() {
             const matchesStatus =
 
                 selectedStatus === "All" || status === selectedStatus;
+
+            const assessment = report.assessment_status || "Uncertain";
+
+            const matchesAssessment =
+
+                selectedAssessment === "All" || assessment === selectedAssessment;
 
             const searchable = [
 
@@ -1078,11 +1099,15 @@ function renderVerification() {
 
                 report.source,
 
-                status
+                status,
+
+                assessment,
+
+                report.assessment_reason
 
             ].join(" ").toLowerCase();
 
-            return matchesStatus && searchable.includes(search);
+            return matchesStatus && matchesAssessment && searchable.includes(search);
 
         });
 
@@ -1092,7 +1117,7 @@ function renderVerification() {
 
             <tr>
 
-                <td colspan="8" class="empty-cell">
+                <td colspan="9" class="empty-cell">
 
                     No matching reports found.
 
@@ -1135,6 +1160,25 @@ function renderVerification() {
                 <td>${escapeHTML(report.source || "Unknown")}</td>
 
                 <td>${escapeHTML(report.trust_score ?? 0)}%</td>
+
+                <td class="assessment-cell">
+                    <span class="assessment-pill ${assessmentClass(report.assessment_status)}">
+                        ${escapeHTML(report.assessment_status || "Uncertain")}
+                    </span>
+                    <div class="assessment-score">
+                        Assessment score:
+                        <strong>${report.assessment_score === null || report.assessment_score === undefined
+                            ? "Not recorded" : `${escapeHTML(report.assessment_score)}/100`}</strong>
+                    </div>
+                    <div class="assessment-reason">
+                        ${escapeHTML(report.assessment_reason || "No automated assessment reason available.")}
+                    </div>
+                    ${Array.isArray(report.assessment_evidence) && report.assessment_evidence.length
+                        ? `<ul class="assessment-evidence">${report.assessment_evidence.map(item => `<li>${escapeHTML(item)}</li>`).join("")}</ul>`
+                        : `<div class="assessment-evidence-empty">${report.assessment_score === null || report.assessment_score === undefined
+                            ? "Evidence not recorded for this older report."
+                            : "No additional evidence details returned."}</div>`}
+                </td>
 
                 <td>
 
@@ -1313,6 +1357,10 @@ document.getElementById("reportSearch")
     .addEventListener("input", renderVerification);
 
 document.getElementById("statusFilter")
+
+    .addEventListener("change", renderVerification);
+
+document.getElementById("assessmentFilter")
 
     .addEventListener("change", renderVerification);
 

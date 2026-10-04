@@ -63,7 +63,6 @@ EVENT_KEYWORDS = {
 
 
 # Routine weather conditions.
-# These are observations, not necessarily severe events.
 OBSERVATION_KEYWORDS = {
     "Clear Sky": [
         "clear sky",
@@ -108,8 +107,7 @@ def classify_event(text: str):
     Classify severe weather events and routine weather
     observations using weighted keyword matching.
 
-    This is a rule-based heuristic classifier,
-    not a trained machine learning model.
+    This is a rule-based heuristic classifier.
     Confidence is a heuristic score, not a probability.
     """
     normalized = normalize_text(text)
@@ -168,13 +166,16 @@ def classify_event(text: str):
     best_event, best_score = ranked[0]
     second_score = ranked[1][1]
 
-    # Resolve ties only when there is a clear flood indicator.
+    # Resolve ties when multiple event types have
+    # the same highest score.
     if best_score > 0 and best_score == second_score:
         tied_events = [
             event for event, score in ranked
             if score == best_score
         ]
 
+        # Give Flood priority when there is a clear
+        # flooding indicator.
         flood_indicators = [
             "flood",
             "flooded",
@@ -197,7 +198,21 @@ def classify_event(text: str):
         if "Flood" in tied_events and has_flood_indicator:
             return "Flood", 75
 
-        return "Unknown", 45
+        # Priority order for tied event classifications.
+        priority = [
+            "Thunderstorm",
+            "Heavy Rainfall",
+            "Strong Wind",
+            "Hailstorm",
+            "Heatwave",
+            "Fog",
+            "Dust Storm",
+            "Flood",
+        ]
+
+        for event in priority:
+            if event in tied_events:
+                return event, 70
 
     # Strong severe-weather matches take priority
     # over routine weather observations.
@@ -235,9 +250,8 @@ def calculate_trust_score(text, source, event_confidence):
     """
     Calculate a lightweight heuristic trust score.
 
-    This is not independent source verification
-    and does not represent the factual accuracy
-    or probability of a report.
+    This does not independently verify the source
+    or the factual accuracy of a report.
     """
     score = 40
 

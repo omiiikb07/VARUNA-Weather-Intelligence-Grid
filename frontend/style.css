@@ -1472,3 +1472,151 @@ select:focus-visible {
 #overviewPage .event-list::-webkit-scrollbar-track {
     background: transparent;
 }
+
+
+/* Automated assessment display */
+.assessment-cell {
+    min-width: 190px;
+    max-width: 260px;
+}
+.assessment-pill {
+    display: inline-block;
+    padding: 5px 8px;
+    border-radius: 20px;
+    background: #382d17;
+    color: var(--orange);
+    font-size: 9px;
+    white-space: nowrap;
+}
+.assessment-pill.weather-supported,
+.assessment-pill.source-validated {
+    background: #10342d;
+    color: var(--teal);
+}
+.assessment-reason {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+
+/* Assessment score and evidence details */
+.assessment-cell {
+    min-width: 220px;
+    max-width: 310px;
+    white-space: normal;
+    vertical-align: top;
+}
+.assessment-score {
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 9px;
+}
+.assessment-score strong {
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 600;
+}
+.assessment-evidence {
+    margin: 6px 0 0 14px;
+    color: #aab8c5;
+    font-size: 9px;
+    line-height: 1.5;
+}
+.assessment-evidence li {
+    margin: 2px 0;
+    overflow-wrap: anywhere;
+}
+.assessment-evidence-empty {
+    margin-top: 6px;
+    color: #718293;
+    font-size: 9px;
+    line-height: 1.4;
+}
+@media (max-width: 900px) {
+    .verification-table { min-width: 1120px; }
+}
+
+
+/* Verification table: keep identifying columns visible while scrolling */
+#verificationPage {
+    min-width: 0;
+}
+
+.verification-table-wrap {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #385365 #0b151e;
+}
+
+.verification-table {
+    width: max(100%, 1260px);
+    min-width: 1260px;
+    table-layout: fixed;
+}
+
+.verification-table th:nth-child(1),
+.verification-table td:nth-child(1) { width: 50px; }
+.verification-table th:nth-child(2),
+.verification-table td:nth-child(2) { width: 235px; }
+.verification-table th:nth-child(3),
+.verification-table td:nth-child(3) { width: 130px; }
+.verification-table th:nth-child(4),
+.verification-table td:nth-child(4) { width: 110px; }
+.verification-table th:nth-child(5),
+.verification-table td:nth-child(5) { width: 110px; }
+.verification-table th:nth-child(6),
+.verification-table td:nth-child(6) { width: 70px; }
+.verification-table th:nth-child(7),
+.verification-table td:nth-child(7) { width: 275px; }
+.verification-table th:nth-child(8),
+.verification-table td:nth-child(8) { width: 100px; }
+.verification-table th:nth-child(9),
+.verification-table td:nth-child(9) { width: 180px; }
+
+.verification-table th:nth-child(1),
+.verification-table td:nth-child(1),
+.verification-table th:nth-child(2),
+.verification-table td:nth-child(2) {
+    position: sticky;
+    background: var(--panel);
+}
+
+.verification-table th:nth-child(1),
+.verification-table th:nth-child(2) {
+    z-index: 4;
+    background: var(--panel-light);
+}
+
+.verification-table td:nth-child(1),
+.verification-table th:nth-child(1) {
+    left: 0;
+}
+
+.verification-table td:nth-child(2),
+.verification-table th:nth-child(2) {
+    left: 50px;
+    box-shadow: 5px 0 8px -7px #000;
+}
+
+.verification-table tbody tr:hover td:nth-child(1),
+.verification-table tbody tr:hover td:nth-child(2) {
+    background: #111f2b;
+}
+
+.verification-table .report-text {
+    min-width: 0;
+    max-width: none;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+    .verification-table-wrap {
+        max-width: calc(100vw - 32px);
+    }
+}

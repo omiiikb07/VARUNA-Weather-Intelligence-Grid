@@ -12,6 +12,10 @@ from models import Base, WeatherReport
 from ai_engine import analyze_report
 from event_engine import create_event_summary
 from ingestion.source_manager import collect_weather
+from assessment_engine import (
+    assess_weather_api_detailed,
+    assess_citizen_report_detailed
+)
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
@@ -38,34 +42,53 @@ async def scheduled_weather_collection():
     while True:
         await asyncio.sleep(SCHEDULE_INTERVAL_SECONDS)
         scheduler_status["running"] = True
-        scheduler_status["last_started"] = datetime.now(timezone.utc).isoformat()
+        scheduler_status["last_started"] = (
+            datetime.now(timezone.utc).isoformat()
+        )
         scheduler_status["last_error"] = None
+
         db = SessionLocal()
+
         try:
-            result = await run_in_threadpool(ingest_weather, db=db)
+            result = await run_in_threadpool(
+                ingest_weather,
+                db=db
+            )
+
             scheduler_status["last_result"] = {
                 "message": result.get("message"),
                 "inserted": result.get("inserted", 0),
-                "skipped_duplicates": result.get("skipped_duplicates", 0),
+                "skipped_duplicates": result.get(
+                    "skipped_duplicates", 0
+                ),
                 "failed": result.get("failed", 0)
             }
+
         except Exception as error:
             scheduler_status["last_error"] = str(error)
+
         finally:
             db.close()
-            scheduler_status["last_completed"] = datetime.now(timezone.utc).isoformat()
+            scheduler_status["last_completed"] = (
+                datetime.now(timezone.utc).isoformat()
+            )
             scheduler_status["running"] = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler_task = asyncio.create_task(scheduled_weather_collection())
+    scheduler_task = asyncio.create_task(
+        scheduled_weather_collection()
+    )
+
     try:
         yield
     finally:
         scheduler_task.cancel()
+
         with suppress(asyncio.CancelledError):
             await scheduler_task
+
         scheduler_status["running"] = False
 
 
@@ -136,6 +159,7 @@ def health():
     }
 
 
+# Automatic Ingestion Status
 @app.get("/ingestion/status")
 def ingestion_status():
     """Return the automatic weather collection schedule and latest run."""
@@ -231,20 +255,62 @@ def create_report(
     db: Session = Depends(get_db)
 ):
     text = report["text"]
-    source = report["source"]
+    source = report.get("source", "Citizen Report")
+    city = report["city"]
+    state = report["state"]
 
+    # Existing event classification and trust score
     analysis = analyze_report(text, source)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # Find recent source-validated weather observations
+    # from the same city and state.
+    observations = (
+        db.query(WeatherReport)
+        .filter(
+            WeatherReport.city.ilike(city),
+            WeatherReport.state.ilike(state),
+            WeatherReport.source == "Weather API (Open-Meteo)",
+            WeatherReport.assessment_status == "Source Validated",
+            WeatherReport.observed_at.isnot(None),
+            WeatherReport.observed_at >= now - timedelta(hours=3),
+            WeatherReport.observed_at <= now + timedelta(minutes=15)
+        )
+        .order_by(WeatherReport.observed_at.desc())
+        .all()
+    )
+
+    # Detailed automated assessment
+    assessment = assess_citizen_report_detailed(
+        analysis["event_type"],
+        observations
+    )
+
+    assessment_status = assessment["status"]
+    assessment_reason = assessment["reason"]
+    assessment_score = assessment["score"]
+    assessment_evidence = assessment["evidence"]
 
     new_report = WeatherReport(
         text=text,
-        city=report["city"],
-        state=report["state"],
+        city=city,
+        state=state,
         latitude=report.get("latitude"),
         longitude=report.get("longitude"),
         source=source,
         event_type=analysis["event_type"],
         trust_score=analysis["trust_score"],
-        verification_status="Pending"
+
+        # Human verification remains separate
+        verification_status="Pending",
+
+        # Automated assessment
+        assessment_status=assessment_status,
+        assessment_reason=assessment_reason,
+        assessment_score=assessment_score,
+        assessment_evidence=assessment_evidence,
+        assessed_at=now
     )
 
     db.add(new_report)
@@ -253,7 +319,18 @@ def create_report(
 
     return {
         "report": new_report,
-        "ai_analysis": analysis
+        "ai_analysis": analysis,
+        "automated_assessment": {
+            "status": new_report.assessment_status,
+            "score": new_report.assessment_score,
+            "reason": new_report.assessment_reason,
+            "evidence": new_report.assessment_evidence or [],
+            "assessed_at": (
+                new_report.assessed_at.isoformat()
+                if new_report.assessed_at
+                else None
+            )
+        }
     }
 
 
@@ -261,8 +338,8 @@ def create_report(
 @app.post("/ingestion/weather")
 def ingest_weather(db: Session = Depends(get_db)):
     """
-    Collect current weather, preprocess reports,
-    analyze them, and store them in the database.
+    Collect current weather, assess the API data,
+    analyze reports, and store them in the database.
     """
 
     collection = collect_weather()
@@ -281,32 +358,52 @@ def ingest_weather(db: Session = Depends(get_db)):
             text = report["text"]
             source = report["source"]
 
-            # Prefer the provider observation time to avoid storing the same
-            # hourly weather snapshot again on the next scheduled run.
-            observed_at = parse_observed_at(report.get("observed_at"))
-            duplicate_query = db.query(WeatherReport).filter(
-                WeatherReport.city == city,
-                WeatherReport.state == state,
-                WeatherReport.source == source,
-                WeatherReport.text == text
-            )
-            if observed_at is not None:
-                duplicate_query = duplicate_query.filter(
-                    WeatherReport.observed_at == observed_at
-                )
-            else:
-                duplicate_query = duplicate_query.filter(
-                    WeatherReport.timestamp >= cutoff
-                )
-            existing = duplicate_query.first()
-
-            if existing:
-                skipped += 1
-                continue
-
             try:
+                # Parse provider observation time
+                observed_at = parse_observed_at(
+                    report.get("observed_at")
+                )
+
+                # Check for duplicate weather snapshots
+                duplicate_query = db.query(WeatherReport).filter(
+                    WeatherReport.city == city,
+                    WeatherReport.state == state,
+                    WeatherReport.source == source,
+                    WeatherReport.text == text
+                )
+
+                if observed_at is not None:
+                    duplicate_query = duplicate_query.filter(
+                        WeatherReport.observed_at == observed_at
+                    )
+                else:
+                    duplicate_query = duplicate_query.filter(
+                        WeatherReport.timestamp >= cutoff
+                    )
+
+                existing = duplicate_query.first()
+
+                if existing:
+                    skipped += 1
+                    continue
+
+                # Existing event classification and trust score
                 analysis = analyze_report(text, source)
 
+                # Detailed automated weather API assessment
+                assessment = assess_weather_api_detailed(
+                    report, observed_at
+                )
+                assessment_status = assessment["status"]
+                assessment_reason = assessment["reason"]
+                assessment_score = assessment["score"]
+                assessment_evidence = assessment["evidence"]
+
+                assessed_at = datetime.now(
+                    timezone.utc
+                ).replace(tzinfo=None)
+
+                # Create database record
                 new_report = WeatherReport(
                     text=text,
                     city=city,
@@ -316,16 +413,26 @@ def ingest_weather(db: Session = Depends(get_db)):
                     source=source,
                     event_type=analysis["event_type"],
                     trust_score=analysis["trust_score"],
+
+                    # Human verification remains separate
                     verification_status="Pending",
 
                     # Structured weather data
                     weather_data=report.get("weather_data"),
-                    observed_at=observed_at
+                    observed_at=observed_at,
+
+                    # Automated assessment
+                    assessment_status=assessment_status,
+                    assessment_reason=assessment_reason,
+                    assessment_score=assessment_score,
+                    assessment_evidence=assessment_evidence,
+                    assessed_at=assessed_at
                 )
 
                 db.add(new_report)
                 db.flush()
 
+                # Include inserted report in API response
                 inserted_reports.append({
                     "id": new_report.id,
                     "city": new_report.city,
@@ -334,6 +441,16 @@ def ingest_weather(db: Session = Depends(get_db)):
                     "trust_score": new_report.trust_score,
                     "verification_status": (
                         new_report.verification_status
+                    ),
+                    "assessment_status": (
+                        new_report.assessment_status
+                    ),
+                    "assessment_reason": (
+                        new_report.assessment_reason
+                    ),
+                    "assessment_score": new_report.assessment_score,
+                    "assessment_evidence": (
+                        new_report.assessment_evidence or []
                     ),
                     "observed_at": (
                         new_report.observed_at.isoformat()
@@ -400,7 +517,6 @@ def update_verification(
     }
 
 
-
 # Get Event Summary with Optional Filters
 @app.get("/events")
 def get_events(
@@ -458,7 +574,9 @@ def get_analytics(db: Session = Depends(get_db)):
         )
 
         # Count reports by verification status
-        status = (report.verification_status or "Pending").strip().casefold()
+        status = (
+            report.verification_status or "Pending"
+        ).strip().casefold()
 
         if status == "verified":
             verification_counts["Verified"] += 1

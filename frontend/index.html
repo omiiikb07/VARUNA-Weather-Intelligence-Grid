@@ -247,6 +247,12 @@
                     <option value="Under Review">Under Review</option>
                     <option value="Rejected">Rejected</option>
                 </select>
+                <select id="assessmentFilter" aria-label="Filter by automated assessment">
+                    <option value="All">All assessments</option>
+                    <option value="Weather-Supported">Weather-Supported</option>
+                    <option value="Uncertain">Uncertain</option>
+                    <option value="Source Validated">Source Validated</option>
+                </select>
             </div>
 
             <div id="verificationNotice" class="verification-notice"></div>
@@ -261,20 +267,21 @@
                         <th>Event</th>
                         <th>Source</th>
                         <th>Trust</th>
+                        <th>Assessment</th>
                         <th>Status</th>
                         <th>Update</th>
                     </tr>
                     </thead>
                     <tbody id="verificationTableBody">
                     <tr>
-                        <td colspan="8" class="empty-cell">Loading reports...</td>
+                        <td colspan="9" class="empty-cell">Loading reports...</td>
                     </tr>
                     </tbody>
                 </table>
             </div>
             <p class="verification-footnote">
-                Verification status is manually updated by an administrator.
-                Trust scores are heuristic and do not prove report accuracy.
+                Automated assessment compares reports with available weather observations; it is not independent confirmation.
+                Verification status is manually updated by an administrator. Trust scores are heuristic.
             </p>
         </section>
 
