@@ -1,26 +1,79 @@
 
 from fastapi import FastAPI, Depends, HTTPException
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta, date
 from pydantic import BaseModel
 from typing import Literal, Optional
 
-from database import engine, get_db
+from database import engine, get_db, SessionLocal
 from models import Base, WeatherReport
 from ai_engine import analyze_report
 from event_engine import create_event_summary
 from ingestion.source_manager import collect_weather
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
 
+SCHEDULE_INTERVAL_SECONDS = 60 * 60
+
+scheduler_status = {
+    "enabled": True,
+    "interval_minutes": 60,
+    "running": False,
+    "last_started": None,
+    "last_completed": None,
+    "last_result": None,
+    "last_error": None
+}
+
+
+async def scheduled_weather_collection():
+    # Wait one full interval after startup before the first automatic run.
+    while True:
+        await asyncio.sleep(SCHEDULE_INTERVAL_SECONDS)
+        scheduler_status["running"] = True
+        scheduler_status["last_started"] = datetime.now(timezone.utc).isoformat()
+        scheduler_status["last_error"] = None
+        db = SessionLocal()
+        try:
+            result = await run_in_threadpool(ingest_weather, db=db)
+            scheduler_status["last_result"] = {
+                "message": result.get("message"),
+                "inserted": result.get("inserted", 0),
+                "skipped_duplicates": result.get("skipped_duplicates", 0),
+                "failed": result.get("failed", 0)
+            }
+        except Exception as error:
+            scheduler_status["last_error"] = str(error)
+        finally:
+            db.close()
+            scheduler_status["last_completed"] = datetime.now(timezone.utc).isoformat()
+            scheduler_status["running"] = False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler_task = asyncio.create_task(scheduled_weather_collection())
+    try:
+        yield
+    finally:
+        scheduler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler_task
+        scheduler_status["running"] = False
+
+
 app = FastAPI(
     title="VARUNA",
     description="National Weather Intelligence & Verification Grid",
-    version="1.0"
+    version="1.0",
+    lifespan=lifespan
 )
 
 
@@ -81,6 +134,12 @@ def health():
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+@app.get("/ingestion/status")
+def ingestion_status():
+    """Return the automatic weather collection schedule and latest run."""
+    return scheduler_status
 
 
 # Get Reports with Optional Filters
@@ -222,14 +281,24 @@ def ingest_weather(db: Session = Depends(get_db)):
             text = report["text"]
             source = report["source"]
 
-            # Check for recent duplicates
-            existing = db.query(WeatherReport).filter(
+            # Prefer the provider observation time to avoid storing the same
+            # hourly weather snapshot again on the next scheduled run.
+            observed_at = parse_observed_at(report.get("observed_at"))
+            duplicate_query = db.query(WeatherReport).filter(
                 WeatherReport.city == city,
                 WeatherReport.state == state,
                 WeatherReport.source == source,
-                WeatherReport.text == text,
-                WeatherReport.timestamp >= cutoff
-            ).first()
+                WeatherReport.text == text
+            )
+            if observed_at is not None:
+                duplicate_query = duplicate_query.filter(
+                    WeatherReport.observed_at == observed_at
+                )
+            else:
+                duplicate_query = duplicate_query.filter(
+                    WeatherReport.timestamp >= cutoff
+                )
+            existing = duplicate_query.first()
 
             if existing:
                 skipped += 1
@@ -251,9 +320,7 @@ def ingest_weather(db: Session = Depends(get_db)):
 
                     # Structured weather data
                     weather_data=report.get("weather_data"),
-                    observed_at=parse_observed_at(
-                        report.get("observed_at")
-                    )
+                    observed_at=observed_at
                 )
 
                 db.add(new_report)

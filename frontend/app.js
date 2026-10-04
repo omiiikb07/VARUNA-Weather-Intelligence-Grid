@@ -1,10 +1,6 @@
 const API = "http://127.0.0.1:8000";
 
-
-
 const REFRESH_INTERVAL = 10000;
-
-
 
 let reports = [];
 
@@ -19,11 +15,10 @@ let liveMap = null;
 let overviewMarkers = null;
 
 let liveMarkers = null;
+
 let eventMarkerLookup = new Map();
 
 let toastTimer = null;
-
-
 
 const pageInfo = {
 
@@ -61,17 +56,11 @@ const pageInfo = {
 
 };
 
-
-
-
-
 // -------------------------
 
 // HELPERS
 
 // -------------------------
-
-
 
 function escapeHTML(value) {
 
@@ -91,13 +80,9 @@ function escapeHTML(value) {
 
 }
 
-
-
 function canonicalStatus(status) {
 
     const value = String(status || "Pending").trim().toLowerCase();
-
-
 
     if (value === "verified") return "Verified";
 
@@ -105,13 +90,9 @@ function canonicalStatus(status) {
 
     if (value === "under review") return "Under Review";
 
-
-
     return "Pending";
 
 }
-
-
 
 function statusClass(status) {
 
@@ -123,17 +104,11 @@ function statusClass(status) {
 
 }
 
-
-
 function formatDate(value) {
 
     if (!value) return "Time unavailable";
 
-
-
     const date = new Date(value);
-
-
 
     if (Number.isNaN(date.getTime())) {
 
@@ -141,19 +116,13 @@ function formatDate(value) {
 
     }
 
-
-
-    return date.toLocaleString();
+    return date.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
 
 }
-
-
 
 function showToast(message, isError = false) {
 
     const toast = document.getElementById("toast");
-
-
 
     toast.textContent = message;
 
@@ -165,11 +134,7 @@ function showToast(message, isError = false) {
 
     toast.classList.add("show");
 
-
-
     clearTimeout(toastTimer);
-
-
 
     toastTimer = setTimeout(() => {
 
@@ -179,15 +144,11 @@ function showToast(message, isError = false) {
 
 }
 
-
-
 function setConnection(connected) {
 
     const dot = document.getElementById("connectionDot");
 
     const status = document.getElementById("connectionStatus");
-
-
 
     dot.classList.toggle("online", connected);
 
@@ -195,17 +156,13 @@ function setConnection(connected) {
 
 }
 
-
-
 function updateSyncTime() {
 
     document.getElementById("lastSync").textContent =
 
-        new Date().toLocaleTimeString();
+        new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" });
 
 }
-
-
 
 async function fetchJSON(url, options = {}) {
 
@@ -223,13 +180,9 @@ async function fetchJSON(url, options = {}) {
 
     });
 
-
-
     if (!response.ok) {
 
         let message = `Request failed (${response.status})`;
-
-
 
         try {
 
@@ -243,21 +196,13 @@ async function fetchJSON(url, options = {}) {
 
         }
 
-
-
         throw new Error(message);
 
     }
 
-
-
     return response.json();
 
 }
-
-
-
-
 
 // -------------------------
 
@@ -265,13 +210,9 @@ async function fetchJSON(url, options = {}) {
 
 // -------------------------
 
-
-
 function createMap(elementId) {
 
     const element = document.getElementById(elementId);
-
-
 
     if (!element || typeof L === "undefined") {
 
@@ -279,11 +220,7 @@ function createMap(elementId) {
 
     }
 
-
-
     const map = L.map(elementId).setView([22.5, 79.0], 5);
-
-
 
     L.tileLayer(
 
@@ -299,217 +236,362 @@ function createMap(elementId) {
 
     ).addTo(map);
 
-
-
     return map;
 
 }
 
-
-
 function initializeMaps() {
+
     overviewMap = createMap("map");
+
     liveMap = createMap("liveMap");
 
     if (overviewMap) overviewMarkers = L.layerGroup().addTo(overviewMap);
+
     if (liveMap) liveMarkers = L.layerGroup().addTo(liveMap);
 
     addMapLegend("map");
+
     addMapLegend("liveMap");
 
     const overviewNote = document.querySelector("#overviewPage .map-note");
+
     const liveNote = document.querySelector("#livePage .map-note");
+
     if (overviewNote) {
+
         overviewNote.textContent = "Markers use report coordinates when available; otherwise, supported cities use approximate city-center locations. Severity is estimated from event type.";
+
     }
+
     if (liveNote) {
+
         liveNote.textContent = "Some markers use approximate city-center locations when GPS coordinates are unavailable. Severity is a prototype estimate based on event type.";
+
     }
+
 }
 
-
-
 function hasCoordinates(event) {
+
     if (event.latitude === null || event.latitude === undefined ||
+
         event.longitude === null || event.longitude === undefined ||
+
         String(event.latitude).trim() === "" ||
+
         String(event.longitude).trim() === "") {
+
         return false;
+
     }
 
     const latitude = Number(event.latitude);
+
     const longitude = Number(event.longitude);
 
     return Number.isFinite(latitude) && Number.isFinite(longitude) &&
+
         latitude >= -90 && latitude <= 90 &&
+
         longitude >= -180 && longitude <= 180;
+
 }
 
 // Approximate city-center coordinates are only a display fallback when GPS is absent.
+
 // These are not report-specific or precise locations.
+
 const APPROXIMATE_CITY_COORDINATES = {
+
     "ahmedabad": [23.0225, 72.5714],
+
     "bengaluru": [12.9716, 77.5946],
+
     "bangalore": [12.9716, 77.5946],
+
     "bhopal": [23.2599, 77.4126],
+
     "chandigarh": [30.7333, 76.7794],
+
     "chennai": [13.0827, 80.2707],
+
     "coimbatore": [11.0168, 76.9558],
+
     "delhi": [28.6139, 77.2090],
+
     "new delhi": [28.6139, 77.2090],
+
     "guwahati": [26.1445, 91.7362],
+
+    "hubballi": [15.3647, 75.1240],
+
     "hyderabad": [17.3850, 78.4867],
+
     "indore": [22.7196, 75.8577],
+
     "jaipur": [26.9124, 75.7873],
+
     "kochi": [9.9312, 76.2673],
+
     "kolkata": [22.5726, 88.3639],
+
     "lucknow": [26.8467, 80.9462],
+
     "mumbai": [19.0760, 72.8777],
+
     "mysore": [12.2958, 76.6394],
+
     "mysuru": [12.2958, 76.6394],
+
+    "mangaluru": [12.9141, 74.8560],
+
     "nagpur": [21.1458, 79.0882],
+
     "pune": [18.5204, 73.8567],
+
+    "patna": [25.5941, 85.1376],
+
+    "jodhpur": [26.2389, 73.0243],
+
+    "vijayawada": [16.5062, 80.6480],
+
+    "varanasi": [25.3176, 82.9739],
+
+    "bhubaneswar": [20.2961, 85.8245],
+
     "srinagar": [34.0837, 74.7973],
+
     "thiruvananthapuram": [8.5241, 76.9366],
+
     "trivandrum": [8.5241, 76.9366],
+
     "visakhapatnam": [17.6868, 83.2185]
+
 };
 
 function getEventLocation(event) {
+
     if (hasCoordinates(event)) {
+
         return {
+
             coordinates: [Number(event.latitude), Number(event.longitude)],
+
             approximate: false
+
         };
+
     }
 
-    const city = String(event.city || "").trim().toLowerCase().replace(/\\s+/g, " ");
+    const city = String(event.city || "").trim().toLowerCase().replace(/\s+/g, " ");
+
     const coordinates = APPROXIMATE_CITY_COORDINATES[city];
 
     return coordinates
+
         ? { coordinates, approximate: true }
+
         : null;
+
 }
 
 function getEstimatedSeverity(event) {
+
     const type = String(event.event_type || "").toLowerCase();
 
     if (/flood|cyclone|landslide|tsunami/.test(type)) return "Critical";
+
     if (/heat ?wave|extreme heat|thunderstorm|heavy rain|severe storm|hail/.test(type)) return "High";
+
     if (/rain|storm|strong wind|wind/.test(type)) return "Moderate";
+
     if (/clear|cloud|sunny|partly cloudy|mainly clear/.test(type)) return "Low";
 
     return "Unclassified";
+
 }
 
 function severityColor(severity) {
+
     const colors = {
+
         Critical: "#ff5d5d",
+
         High: "#f0ad4e",
+
         Moderate: "#f5cf62",
+
         Low: "#55d6b7",
+
         Unclassified: "#94a3b8"
+
     };
 
     return colors[severity] || colors.Unclassified;
+
 }
 
 function eventKey(event) {
+
     return [event.city, event.state, event.event_type]
+
         .map(value => String(value || "").trim().toLowerCase())
+
         .join("|");
+
 }
 
 function focusEventOnMap(map, event, mapName) {
+
     const location = getEventLocation(event);
 
     if (!map || !location) {
+
         showToast("No GPS or known city location is available for this event.", true);
+
         return;
+
     }
 
     map.setView(location.coordinates, 10);
 
     const markersForEvent = eventMarkerLookup.get(eventKey(event));
+
     const marker = markersForEvent && markersForEvent[mapName];
+
     if (marker) marker.openPopup();
+
 }
 
 function addEventMarkers(map, markerLayer, eventList, mapName) {
+
     if (!map || !markerLayer) return;
 
     markerLayer.clearLayers();
 
     eventList.forEach(event => {
+
         const location = getEventLocation(event);
+
         if (!location) return;
 
         const severity = getEstimatedSeverity(event);
+
         const color = severityColor(severity);
+
         const marker = L.circleMarker(location.coordinates, {
+
             radius: severity === "Critical" ? 10 : 8,
+
             color,
+
             fillColor: color,
+
             fillOpacity: 0.82,
+
             weight: 2
+
         });
 
         const locationLabel = location.approximate
+
             ? "Approximate city-center location"
+
             : "Report coordinates";
+
         const popup = `
+
             <strong>${escapeHTML(event.city || "Unknown location")}</strong><br>
+
             ${escapeHTML(event.state || "")}<br>
+
             Event: ${escapeHTML(event.event_type || "Unclassified")}<br>
+
             Estimated severity: ${escapeHTML(severity)}<br>
+
             Confidence: ${escapeHTML(event.confidence ?? "N/A")}%<br>
+
             Unique reports: ${escapeHTML(event.report_count ?? 0)}<br>
+
             Submitted reports: ${escapeHTML(event.submitted_report_count ?? event.report_count ?? 0)}<br>
+
             <small>${locationLabel}</small>
+
         `;
 
         marker.bindPopup(popup);
+
         marker.addTo(markerLayer);
 
         const key = eventKey(event);
+
         if (!eventMarkerLookup.has(key)) {
+
             eventMarkerLookup.set(key, {});
+
         }
+
         eventMarkerLookup.get(key)[mapName] = marker;
+
     });
+
 }
 
 function addMapLegend(elementId) {
+
     const mapElement = document.getElementById(elementId);
+
     if (!mapElement || mapElement.parentElement.querySelector(".map-severity-legend")) return;
 
     const legend = document.createElement("div");
+
     legend.className = "map-severity-legend";
+
     legend.setAttribute("aria-label", "Estimated event severity legend");
+
     legend.style.cssText = "display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:9px 0 2px;font-size:11px;color:#9fb3c8;";
 
     [
+
         ["Critical", "#ff5d5d"],
+
         ["High", "#f0ad4e"],
+
         ["Moderate", "#f5cf62"],
+
         ["Low", "#55d6b7"],
+
         ["Unclassified", "#94a3b8"]
+
     ].forEach(([label, color]) => {
+
         const item = document.createElement("span");
+
         item.style.cssText = "display:inline-flex;align-items:center;gap:5px;";
+
         const dot = document.createElement("i");
+
         dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};`;
+
         item.append(dot, document.createTextNode(label));
+
         legend.appendChild(item);
+
     });
 
     mapElement.insertAdjacentElement("afterend", legend);
+
 }
 
 function refreshMaps() {
+
     eventMarkerLookup = new Map();
+
     addEventMarkers(overviewMap, overviewMarkers, events, "overview");
+
     addEventMarkers(liveMap, liveMarkers, events, "live");
+
 }
 
 function resizeVisibleMap() {
@@ -522,8 +604,6 @@ function resizeVisibleMap() {
 
     }
 
-
-
     if (liveMap &&
 
         document.getElementById("livePage").classList.contains("active")) {
@@ -533,31 +613,24 @@ function resizeVisibleMap() {
     }
 
 }
+
 // -------------------------
 
 // NAVIGATION
 
 // -------------------------
 
-
-
 function switchView(viewName) {
 
     const validViews = ["overview", "live", "verification", "analytics"];
 
-
-
     if (!validViews.includes(viewName)) return;
-
-
 
     document.querySelectorAll(".page").forEach(page => {
 
         page.classList.remove("active");
 
     });
-
-
 
     document.querySelectorAll(".nav-item").forEach(button => {
 
@@ -571,39 +644,25 @@ function switchView(viewName) {
 
     });
 
-
-
     const page = document.getElementById(`${viewName}Page`);
 
-
-
     if (page) page.classList.add("active");
-
-
 
     document.getElementById("pageTitle").textContent =
 
         pageInfo[viewName].title;
 
-
-
     document.getElementById("pageSubtitle").textContent =
 
         pageInfo[viewName].subtitle;
 
-
-
     resizeVisibleMap();
-
-
 
     if (viewName === "verification") {
 
         renderVerification();
 
     }
-
-
 
     if (viewName === "analytics") {
 
@@ -612,8 +671,6 @@ function switchView(viewName) {
     }
 
 }
-
-
 
 document.querySelectorAll(".nav-item").forEach(button => {
 
@@ -625,17 +682,11 @@ document.querySelectorAll(".nav-item").forEach(button => {
 
 });
 
-
-
 document.getElementById("adminButton").addEventListener("click", () => {
 
     switchView("verification");
 
 });
-
-
-
-
 
 // -------------------------
 
@@ -643,15 +694,11 @@ document.getElementById("adminButton").addEventListener("click", () => {
 
 // -------------------------
 
-
-
 async function loadEvents() {
 
     const data = await fetchJSON(`${API}/events`);
 
     events = Array.isArray(data.events) ? data.events : [];
-
-
 
     displayOverviewEvents();
 
@@ -663,57 +710,88 @@ async function loadEvents() {
 
 }
 
-
-
 async function loadReports() {
+
     const data = await fetchJSON(`${API}/reports`);
+
     reports = Array.isArray(data) ? data : [];
 
     updateReportStats();
+
     renderVerification();
+
     renderAnalytics();
+
     renderActivity();
+
 }
 
 async function loadAnalytics() {
+
     const data = await fetchJSON(`${API}/analytics`);
+
     analyticsData = data && typeof data === "object" ? data : null;
+
     renderAnalytics();
+
 }
 
 async function loadAllData() {
+
     const results = await Promise.allSettled([
+
         loadEvents(),
+
         loadReports(),
+
         loadAnalytics()
+
     ]);
 
     const eventsLoaded = results[0].status === "fulfilled";
+
     const reportsLoaded = results[1].status === "fulfilled";
+
     const analyticsLoaded = results[2].status === "fulfilled";
 
     // Events and reports power the core dashboard; analytics is an additional endpoint.
+
     setConnection(eventsLoaded && reportsLoaded);
 
     if (eventsLoaded || reportsLoaded || analyticsLoaded) {
+
         updateSyncTime();
+
     }
 
     if (!eventsLoaded) {
+
         console.error("Could not load events:", results[0].reason);
+
     }
+
     if (!reportsLoaded) {
+
         console.error("Could not load reports:", results[1].reason);
+
     }
+
     if (!analyticsLoaded) {
+
         analyticsData = null;
+
         console.error("Could not load analytics:", results[2].reason);
+
         renderAnalytics();
+
     }
 
     if (!eventsLoaded && !reportsLoaded) {
+
         showToast("Could not connect to VARUNA backend.", true);
+
     }
+
 }
 
 // -------------------------
@@ -722,21 +800,15 @@ async function loadAllData() {
 
 // -------------------------
 
-
-
 function createEventCard(event) {
 
     const card = document.createElement("div");
 
     card.className = "event-card";
 
-
-
     const verifiedCount = Number(event.verified_report_count || 0);
 
     const uniqueCount = Number(event.report_count || 0);
-
-
 
     card.innerHTML = `
 
@@ -754,8 +826,6 @@ function createEventCard(event) {
 
         </div>
 
-
-
         <div class="event-meta">
 
             <span>${escapeHTML(uniqueCount)} UNIQUE REPORTS</span>
@@ -763,8 +833,6 @@ function createEventCard(event) {
             <span>${escapeHTML(event.status || "ACTIVE")}</span>
 
         </div>
-
-
 
         <div class="event-meta">
 
@@ -780,22 +848,21 @@ function createEventCard(event) {
 
     `;
 
-
-
     card.addEventListener("click", () => {
+
         const livePageActive = document.getElementById("livePage")
+
             ?.classList.contains("active");
+
         const targetMap = livePageActive ? liveMap : overviewMap;
+
         focusEventOnMap(targetMap, event, livePageActive ? "live" : "overview");
+
     });
-
-
 
     return card;
 
 }
-
-
 
 function fillEventList(elementId, eventList) {
 
@@ -803,17 +870,13 @@ function fillEventList(elementId, eventList) {
 
     list.innerHTML = "";
 
-
-
     if (!eventList.length) {
 
-        list.innerHTML = `<div class="empty">No active weather events</div>`;
+        list.innerHTML = `<div class="empty">No weather events available</div>`;
 
         return;
 
     }
-
-
 
     eventList.forEach(event => {
 
@@ -823,21 +886,15 @@ function fillEventList(elementId, eventList) {
 
 }
 
-
-
 function displayOverviewEvents() {
 
     document.getElementById("eventCount").textContent =
 
-        `${events.length} EVENTS`;
-
-
+        `${events.length} EVENT GROUPS`;
 
     fillEventList("eventList", events);
 
 }
-
-
 
 function displayLiveEvents() {
 
@@ -845,15 +902,9 @@ function displayLiveEvents() {
 
         `${events.length} events`;
 
-
-
     fillEventList("liveEventList", events);
 
 }
-
-
-
-
 
 // -------------------------
 
@@ -861,13 +912,9 @@ function displayLiveEvents() {
 
 // -------------------------
 
-
-
 function updateEventStats() {
 
     document.getElementById("activeEvents").textContent = events.length;
-
-
 
     const highConfidenceCount = events.filter(
 
@@ -875,21 +922,15 @@ function updateEventStats() {
 
     ).length;
 
-
-
     document.getElementById("highSeverity").textContent =
 
         highConfidenceCount;
 
 }
 
-
-
 function updateReportStats() {
 
     const total = reports.length;
-
-
 
     const verified = reports.filter(
 
@@ -897,15 +938,11 @@ function updateReportStats() {
 
     ).length;
 
-
-
     const percentage = total
 
         ? Math.round((verified / total) * 100)
 
         : 0;
-
-
 
     document.getElementById("reportsAnalyzed").textContent = total;
 
@@ -914,8 +951,6 @@ function updateReportStats() {
     document.getElementById("verifiedSubtext").textContent =
 
         `${verified} of ${total} reports verified`;
-
-
 
     document.getElementById("totalReportCount").textContent = total;
 
@@ -931,23 +966,15 @@ function updateReportStats() {
 
 }
 
-
-
-
-
 // -------------------------
 
 // ACTIVITY
 
 // -------------------------
 
-
-
 function renderActivity() {
 
     const container = document.getElementById("activityList");
-
-
 
     const latestReports = [...reports]
 
@@ -958,8 +985,6 @@ function renderActivity() {
         })
 
         .slice(0, 5);
-
-
 
     if (!latestReports.length) {
 
@@ -972,8 +997,6 @@ function renderActivity() {
         return;
 
     }
-
-
 
     container.innerHTML = latestReports.map(report => `
 
@@ -1007,26 +1030,17 @@ function renderActivity() {
 
 }
 
-
-
-
-
 // -------------------------
 
 // VERIFICATION TABLE
 
 // -------------------------
 
-
-
 function renderVerification() {
 
     const body = document.getElementById("verificationTableBody");
 
-
     if (!body) return;
-
-
 
     const search = (
 
@@ -1034,13 +1048,9 @@ function renderVerification() {
 
     ).trim().toLowerCase();
 
-
-
     const selectedStatus =
 
         document.getElementById("statusFilter")?.value || "All";
-
-
 
     const filteredReports = [...reports]
 
@@ -1050,13 +1060,9 @@ function renderVerification() {
 
             const status = canonicalStatus(report.verification_status);
 
-
-
             const matchesStatus =
 
                 selectedStatus === "All" || status === selectedStatus;
-
-
 
             const searchable = [
 
@@ -1076,13 +1082,9 @@ function renderVerification() {
 
             ].join(" ").toLowerCase();
 
-
-
             return matchesStatus && searchable.includes(search);
 
         });
-
-
 
     if (!filteredReports.length) {
 
@@ -1104,13 +1106,9 @@ function renderVerification() {
 
     }
 
-
-
     body.innerHTML = filteredReports.map(report => {
 
         const status = canonicalStatus(report.verification_status);
-
-
 
         return `
 
@@ -1194,8 +1192,6 @@ function renderVerification() {
 
 }
 
-
-
 function showVerificationNotice(message, type = "success") {
 
     const notice = document.getElementById("verificationNotice");
@@ -1206,8 +1202,6 @@ function showVerificationNotice(message, type = "success") {
 
 }
 
-
-
 async function saveVerification(reportId) {
 
     const select = document.querySelector(
@@ -1216,27 +1210,19 @@ async function saveVerification(reportId) {
 
     );
 
-
-
     const button = document.querySelector(
 
         `[data-save-id="${reportId}"]`
 
     );
 
-
-
     if (!select || !button) return;
-
-
 
     const status = select.value;
 
     button.disabled = true;
 
     button.textContent = "Saving...";
-
-
 
     try {
 
@@ -1260,23 +1246,17 @@ async function saveVerification(reportId) {
 
         );
 
-
-
         const report = reports.find(
 
             item => Number(item.id) === Number(reportId)
 
         );
 
-
-
         if (report) {
 
             report.verification_status = result.verification_status || status;
 
         }
-
-
 
         updateReportStats();
 
@@ -1285,8 +1265,6 @@ async function saveVerification(reportId) {
         renderAnalytics();
 
         renderActivity();
-
-
 
         showVerificationNotice(
 
@@ -1318,47 +1296,31 @@ async function saveVerification(reportId) {
 
 }
 
-
-
 document.getElementById("verificationTableBody")
 
     .addEventListener("click", event => {
 
         const button = event.target.closest("[data-save-id]");
 
-
-
         if (!button) return;
-
-
 
         saveVerification(Number(button.dataset.saveId));
 
     });
 
-
-
 document.getElementById("reportSearch")
 
     .addEventListener("input", renderVerification);
 
-
-
 document.getElementById("statusFilter")
 
     .addEventListener("change", renderVerification);
-
-
-
-
 
 // -------------------------
 
 // ANALYTICS
 
 // -------------------------
-
-
 
 function renderBars(elementId, data) {
 
@@ -1368,8 +1330,6 @@ function renderBars(elementId, data) {
 
         .sort((a, b) => b[1] - a[1]);
 
-
-
     if (!entries.length) {
 
         container.innerHTML = `<div class="empty">No data available</div>`;
@@ -1378,17 +1338,11 @@ function renderBars(elementId, data) {
 
     }
 
-
-
     const maxValue = Math.max(...entries.map(([, count]) => count), 1);
-
-
 
     container.innerHTML = entries.map(([label, count]) => {
 
         const width = Math.max(0, (count / maxValue) * 100);
-
-
 
         return `
 
@@ -1416,68 +1370,108 @@ function renderBars(elementId, data) {
 
 }
 
-
-
 function renderAnalytics() {
+
     // Use backend analytics when available; otherwise fall back to loaded reports.
+
     const eventTypeCounts = {};
+
     const sourceCounts = {};
+
     const statusCounts = {
+
         "Verified": 0,
+
         "Pending": 0,
+
         "Under Review": 0,
+
         "Rejected": 0
+
     };
 
     reports.forEach(report => {
+
         const eventType = report.event_type || "Unknown";
+
         const source = report.source || "Unknown";
+
         const status = canonicalStatus(report.verification_status);
 
         eventTypeCounts[eventType] = (eventTypeCounts[eventType] || 0) + 1;
+
         sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+
         statusCounts[status] += 1;
+
     });
 
     const exactDuplicates = events.reduce(
+
         (sum, event) => sum + Number(event.duplicate_count || 0), 0
+
     );
+
     const nearDuplicates = events.reduce(
+
         (sum, event) => sum + Number(event.near_duplicate_count || 0), 0
+
     );
 
     const apiTypes = analyticsData?.reports_by_event_type;
+
     const apiStatuses = analyticsData?.reports_by_verification_status;
 
     const displayedEventTypes = Array.isArray(apiTypes)
+
         ? Object.fromEntries(apiTypes.map(item => [
+
             item.event_type || "Unknown", Number(item.count || 0)
+
         ]))
+
         : eventTypeCounts;
 
     const displayedStatuses = Array.isArray(apiStatuses)
+
         ? Object.fromEntries(apiStatuses.map(item => [
+
             canonicalStatus(item.status), Number(item.count || 0)
+
         ]))
+
         : statusCounts;
 
     const total = Number.isFinite(Number(analyticsData?.total_reports))
+
         ? Number(analyticsData.total_reports)
+
         : reports.length;
+
     const totalEvents = Number.isFinite(Number(analyticsData?.total_events))
+
         ? Number(analyticsData.total_events)
+
         : events.length;
+
     const verified = Number(displayedStatuses["Verified"] || 0);
 
     document.getElementById("analyticsTotal").textContent = total;
+
     document.getElementById("analyticsEvents").textContent = totalEvents;
+
     document.getElementById("analyticsVerified").textContent = verified;
+
     document.getElementById("analyticsDuplicates").textContent =
+
         exactDuplicates + nearDuplicates;
 
     renderBars("eventTypeAnalytics", displayedEventTypes);
+
     renderBars("sourceAnalytics", sourceCounts);
+
     renderBars("statusAnalytics", displayedStatuses);
+
 }
 
 // -------------------------
@@ -1485,8 +1479,6 @@ function renderAnalytics() {
 // MANUAL REFRESH BUTTONS
 
 // -------------------------
-
-
 
 document.getElementById("refreshEventsButton")
 
@@ -1508,8 +1500,6 @@ document.getElementById("refreshEventsButton")
 
     });
 
-
-
 document.getElementById("refreshReportsButton")
 
     .addEventListener("click", async () => {
@@ -1530,15 +1520,9 @@ document.getElementById("refreshReportsButton")
 
     });
 
-
-
 document.getElementById("refreshAnalyticsButton")
 
     .addEventListener("click", loadAllData);
-
-
-
-
 
 // -------------------------
 
@@ -1546,16 +1530,10 @@ document.getElementById("refreshAnalyticsButton")
 
 // -------------------------
 
-
-
 initializeMaps();
 
 loadAllData();
 
-
-
 setInterval(loadAllData, REFRESH_INTERVAL);
-
-
 
 window.addEventListener("resize", resizeVisibleMap);

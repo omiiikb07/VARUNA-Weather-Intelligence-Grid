@@ -1439,3 +1439,36 @@ select:focus-visible {
         bottom: 12px;
     }
 }
+
+
+/* VARUNA: compact Overview map and independently scrollable event feed */
+#overviewPage .workspace {
+    align-items: start;
+}
+
+#overviewPage .map-panel,
+#overviewPage .events-panel {
+    align-self: start;
+    min-width: 0;
+}
+
+#overviewPage .event-list {
+    max-height: 390px;
+    overflow-y: auto;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: #294657 transparent;
+}
+
+#overviewPage .event-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#overviewPage .event-list::-webkit-scrollbar-thumb {
+    background: #294657;
+    border-radius: 10px;
+}
+
+#overviewPage .event-list::-webkit-scrollbar-track {
+    background: transparent;
+}
