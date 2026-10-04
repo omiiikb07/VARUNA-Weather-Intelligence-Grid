@@ -18,6 +18,8 @@ let liveMarkers = null;
 
 let eventMarkerLookup = new Map();
 
+let selectedEventMarkers = { overview: null, live: null };
+
 let toastTimer = null;
 
 const pageInfo = {
@@ -454,13 +456,38 @@ function focusEventOnMap(map, event, mapName) {
 
     }
 
-    map.setView(location.coordinates, 10);
+    // Animate the map toward the selected event for clearer navigation.
+    map.flyTo(location.coordinates, 11, {
+
+        animate: true,
+
+        duration: 0.8
+
+    });
 
     const markersForEvent = eventMarkerLookup.get(eventKey(event));
 
     const marker = markersForEvent && markersForEvent[mapName];
 
-    if (marker) marker.openPopup();
+    if (marker) {
+
+        const previousMarker = selectedEventMarkers[mapName];
+
+        // Restore the previously selected marker to its normal appearance.
+        if (previousMarker && previousMarker !== marker && previousMarker._varunaDefaultStyle) {
+
+            previousMarker.setStyle(previousMarker._varunaDefaultStyle);
+
+        }
+
+        // Make the selected marker stand out without changing its severity color.
+        marker.setStyle({ radius: 12, weight: 4, fillOpacity: 1 });
+
+        selectedEventMarkers[mapName] = marker;
+
+        marker.openPopup();
+
+    }
 
 }
 
@@ -493,6 +520,21 @@ function addEventMarkers(map, markerLayer, eventList, mapName) {
             weight: 2
 
         });
+
+        // Save the normal style so it can be restored after another event is selected.
+        marker._varunaDefaultStyle = {
+
+            radius: marker.options.radius,
+
+            color: marker.options.color,
+
+            fillColor: marker.options.fillColor,
+
+            fillOpacity: marker.options.fillOpacity,
+
+            weight: marker.options.weight
+
+        };
 
         const locationLabel = location.approximate
 
@@ -587,6 +629,8 @@ function addMapLegend(elementId) {
 function refreshMaps() {
 
     eventMarkerLookup = new Map();
+
+    selectedEventMarkers = { overview: null, live: null };
 
     addEventMarkers(overviewMap, overviewMarkers, events, "overview");
 
